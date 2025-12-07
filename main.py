@@ -97,3 +97,11 @@ class Container:
             self.inserted = not self.inserted
         
 
+
+class Solution:
+    def __init__(self, containers=[]) -> None:
+        self.containers = containers
+    
+    def add_containers(self, new_containers:list[Container]) -> None:
+        self.containers += new_containers
+    
