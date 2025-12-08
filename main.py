@@ -99,9 +99,28 @@ class Container:
 
 
 class Solution:
-    def __init__(self, containers=[]) -> None:
+    def __init__(self, containers: list[Container] | None = None) -> None:
+        if containers is None:
+            containers = []
         self.containers = containers
     
     def add_containers(self, new_containers:list[Container]) -> None:
         self.containers += new_containers
     
+    def is_feasible(self):
+        
+        for container in self.containers:
+            if (container.inserted) and (not container.fits_in_magazine()):
+                return False # kontener wlozony i nie miesci sie w magazynie wiec niedopuszczalne
+        
+        for i in range(len(self.containers)):
+            container_1 = self.containers[i]
+            if (not container_1.inserted):
+                continue
+            for j in range(i+1, len(self.containers)):
+                container_2 = self.containers[j]
+                if (container_2.inserted) and not (container_1.doesnt_overlap(container_2)):
+                    return False # oba kontenery sa wlozone i sie nakladaja wiec niedopuszczalne
+        return True
+            
+                
