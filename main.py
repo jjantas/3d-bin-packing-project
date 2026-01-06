@@ -6,7 +6,7 @@ import os
 from ga import GAConfig, run_ga
 from viz import plot_solution
 from io_utils import load_boxes_from_csv
-
+from benchmark import benchmark_basic
 
 def parse_args():
     p = argparse.ArgumentParser()
@@ -38,6 +38,9 @@ def parse_args():
 
     p.add_argument("--csv", type=str, default="runs/history.csv")
     p.add_argument("--plot", action="store_true")
+
+    p.add_argument("--benchmark", action="store_true", help="run benchmark suite and save runs/summary.csv")
+
 
     return p.parse_args()
 
@@ -80,6 +83,16 @@ def main():
     # CLI warehouse override
     if args.warehouse is not None:
         warehouse = tuple(args.warehouse)
+
+    if args.benchmark:
+        benchmark_basic(
+            boxes_csv=args.boxes_csv if args.boxes_csv else "data/boxes.csv",
+            warehouse=warehouse,
+            mode=args.mode,
+            seeds=[0, 1, 2, 3, 4],
+        )
+        return
+
 
     cfg = GAConfig(
         pop_size=args.pop,

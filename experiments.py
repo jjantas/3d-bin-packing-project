@@ -1,11 +1,13 @@
 # src/binpack3d/experiments.py
 from __future__ import annotations
 import random
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Literal
 from models import Solution, Dims, Container
 from io_utils import make_containers
 from fitness import fitness, FitnessMode
 
+
+InitStrategy = Literal["constructive", "pure_random"]
 
 def _rand_int_clamped(lo: int, hi: int) -> int:
     if hi < lo:
@@ -142,6 +144,7 @@ def random_solution(
     warehouse: Dims,
     prob_presence: float,
     bias_inside: bool = True,
+    init: InitStrategy = "constructive",
 ) -> Solution:
     containers = make_containers(boxes, warehouse)
 
@@ -150,10 +153,17 @@ def random_solution(
         c.choose_presence_randomly(prob_presence)
         c.choose_rotation_randomly()
 
-        if not c.inserted:
+        # zawsze ustaw coś sensownego w polach x,y,z
+        if init == "pure_random":
+            # "stara" losowość: pełne losowanie pozycji
             c.place_randomly(bias_inside=bias_inside)
+
         else:
-            _place_supported_floor_first(c, placed, bias_inside=bias_inside)
+            # constructive: Twoje floor-first + supporters + no-overlap
+            if not c.inserted:
+                c.place_randomly(bias_inside=bias_inside)
+            else:
+                _place_supported_floor_first(c, placed, bias_inside=bias_inside)
 
         placed.append(c)
 
@@ -173,7 +183,13 @@ def random_search(
     best_f = -1
 
     for _ in range(trials):
-        sol = random_solution(boxes, warehouse, prob_presence=prob_presence, bias_inside=True)
+        # UWAGA: random_search zostawiamy "constructive" żeby baseline był mocny i stabilny
+        sol = random_solution(
+            boxes, warehouse,
+            prob_presence=prob_presence,
+            bias_inside=True,
+            init="constructive",
+        )
         f = fitness(sol, mode=fitness_mode)
         if f > best_f:
             best_f = f

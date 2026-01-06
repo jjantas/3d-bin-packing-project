@@ -4,17 +4,21 @@ import random
 from dataclasses import dataclass
 from typing import List, Literal, Dict, Any
 from models import Solution, Dims, Container
-from experiments import random_solution, _place_supported_floor_first
+from experiments import random_solution, _place_supported_floor_first, InitStrategy
 from fitness import fitness, FitnessMode
 
 SelectionMode = Literal["threshold", "tournament"]
-
+GAInitMode = Literal["constructive", "random", "mixed"]
 
 @dataclass
 class GAConfig:
     pop_size: int = 200
     generations: int = 300
     prob_presence_init: float = 0.7
+
+    # NEW: jak inicjalizować populację startową
+    init_strategy: GAInitMode = "mixed"
+    init_constructive_ratio: float = 0.2  # tylko dla mixed
 
     selection: SelectionMode = "tournament"
     threshold_keep_ratio: float = 0.25
@@ -28,11 +32,16 @@ class GAConfig:
     p_mut_presence: float = 0.05
     mutation_strength: float = 0.15
 
-    # NOWE: naprawa podparcia (snap do podłogi / na inny kontener)
     p_mut_resupport: float = 0.20
-
     fitness_mode: FitnessMode = "strict"
 
+def _pick_init_mode(cfg: GAConfig) -> InitStrategy:
+    if cfg.init_strategy == "constructive":
+        return "constructive"
+    if cfg.init_strategy == "random":
+        return "pure_random"
+    # mixed:
+    return "constructive" if random.random() < cfg.init_constructive_ratio else "pure_random"
 
 def evaluate_population(pop: List[Solution], mode: FitnessMode) -> List[int]:
     return [fitness(ind, mode=mode) for ind in pop]
@@ -86,14 +95,15 @@ def run_ga(
     random.seed(seed)
 
     population: List[Solution] = [
-        random_solution(
-            boxes=boxes,
-            warehouse=warehouse,
-            prob_presence=cfg.prob_presence_init,
-            bias_inside=True,
-        )
-        for _ in range(cfg.pop_size)
-    ]
+            random_solution(
+                boxes=boxes,
+                warehouse=warehouse,
+                prob_presence=cfg.prob_presence_init,
+                bias_inside=True,
+                init=_pick_init_mode(cfg),
+            )
+            for _ in range(cfg.pop_size)
+        ]
 
     best: Solution | None = None
     best_score = -1
@@ -116,7 +126,15 @@ def run_ga(
 
         if gen % log_every == 0 or gen == cfg.generations - 1:
             avg = sum(scores) / max(1, len(scores))
-            history.append({"gen": gen, "best": best_score, "gen_best": gen_best_score, "avg": avg})
+            feasible_cnt = sum(1 for ind in population if ind.is_feasible())
+            feasible_rate = feasible_cnt / max(1, len(population))
+            history.append({
+                "gen": gen,
+                "best": best_score,
+                "gen_best": gen_best_score,
+                "avg": avg,
+                "feasible_rate": feasible_rate,
+            })
 
         if no_improve >= patience:
             break
