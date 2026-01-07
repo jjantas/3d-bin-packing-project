@@ -142,7 +142,7 @@ def main():
     write_history_csv(args.csv, result["history"], meta)
 
     if args.plot and result["best_solution"] is not None:
-        plot_solution(result["best_solution"], warehouse, title=f"best={result['best_fitness']}")
+        plot_solution(result["best_solution"], warehouse, title=f"3D Bin Packing, Warehouse={warehouse}, Fitness={result['best_fitness']:.2f}")
 
 
 if __name__ == "__main__":

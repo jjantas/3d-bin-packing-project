@@ -4,6 +4,8 @@ from typing import Tuple
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from models import Solution, Dims
+from plot_results import ensure_dir
+import os
 
 
 def _cuboid_faces(x, y, z, dx, dy, dz):
@@ -50,4 +52,9 @@ def plot_solution(sol: Solution, warehouse: Dims, title: str = "") -> None:
         poly = Poly3DCollection(faces, alpha=0.25)
         ax.add_collection3d(poly)
 
+    ensure_dir("viz")
+
+    out_path = os.path.join("viz", f"{title.replace(' ', '_')}.png")
+    plt.savefig(out_path)
     plt.show()
+
