@@ -10,15 +10,17 @@ from fitness import fitness, FitnessMode
 SelectionMode = Literal["threshold", "tournament"]
 GAInitMode = Literal["constructive", "random", "mixed"]
 
+# raportujemy tylko "prawdziwy" wynik: strict albo partial
+ReportMode = Literal["strict", "partial"]
+
 @dataclass
 class GAConfig:
     pop_size: int = 200
     generations: int = 300
     prob_presence_init: float = 0.7
 
-    # NEW: jak inicjalizować populację startową
     init_strategy: GAInitMode = "mixed"
-    init_constructive_ratio: float = 0.2  # tylko dla mixed
+    init_constructive_ratio: float = 0.2
 
     selection: SelectionMode = "tournament"
     threshold_keep_ratio: float = 0.25
@@ -33,15 +35,21 @@ class GAConfig:
     mutation_strength: float = 0.15
 
     p_mut_resupport: float = 0.20
-    fitness_mode: FitnessMode = "strict"
+
+    # KLUCZ: na czym GA selekcjonuje (gradient)
+    fitness_mode: FitnessMode = "penalized"
+
+    # KLUCZ: co raportujemy jako "best_fitness" (porównywalne z baseline)
+    report_mode: ReportMode = "strict"
+
 
 def _pick_init_mode(cfg: GAConfig) -> InitStrategy:
     if cfg.init_strategy == "constructive":
         return "constructive"
     if cfg.init_strategy == "random":
         return "pure_random"
-    # mixed:
     return "constructive" if random.random() < cfg.init_constructive_ratio else "pure_random"
+
 
 def evaluate_population(pop: List[Solution], mode: FitnessMode) -> List[int]:
     return [fitness(ind, mode=mode) for ind in pop]
@@ -68,7 +76,6 @@ def uniform_crossover(a: Solution, b: Solution, p_cross: float) -> Solution:
 def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
     placed: list[Container] = []
     for c in sol.containers:
-        # zwykła mutacja
         c.mutation(
             prob_of_moving=cfg.p_mut_move,
             prob_of_rotation=cfg.p_mut_rot,
@@ -76,14 +83,13 @@ def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
             mutation_strength=cfg.mutation_strength,
         )
 
-        # jeśli kontener jest inserted, próbuj czasem "naprawić" podparcie
+        # naprawa podparcia / próbuj stawiać sensownie
         if c.inserted and (random.random() < cfg.p_mut_resupport):
             _place_supported_floor_first(c, placed, bias_inside=True)
 
         placed.append(c)
 
 
-# reszta run_ga bez zmian
 def run_ga(
     boxes: List[Dims],
     warehouse: Dims,
@@ -95,62 +101,96 @@ def run_ga(
     random.seed(seed)
 
     population: List[Solution] = [
-            random_solution(
-                boxes=boxes,
-                warehouse=warehouse,
-                prob_presence=cfg.prob_presence_init,
-                bias_inside=True,
-                init=_pick_init_mode(cfg),
-            )
-            for _ in range(cfg.pop_size)
-        ]
+        random_solution(
+            boxes=boxes,
+            warehouse=warehouse,
+            prob_presence=cfg.prob_presence_init,
+            bias_inside=True,
+            init=_pick_init_mode(cfg),
+        )
+        for _ in range(cfg.pop_size)
+    ]
 
-    best: Solution | None = None
-    best_score = -1
-    best_gen = 0
+    # najlepszy wg penalized (do prowadzenia selekcji)
+    best_eval: Solution | None = None
+    best_eval_score = -1
+    best_eval_gen = 0
     no_improve = 0
+
+    # najlepszy FEASIBLE wg report_mode (do raportu / porównania z baseline)
+    best_report: Solution | None = None
+    best_report_score = -1
+    best_report_gen = 0
+
     history = []
 
     for gen in range(cfg.generations):
-        scores = evaluate_population(population, mode=cfg.fitness_mode)
+        # 1) główna ocena (gradient)
+        eval_scores = evaluate_population(population, mode=cfg.fitness_mode)
 
-        gen_best_i = max(range(len(population)), key=lambda i: scores[i])
-        gen_best_score = scores[gen_best_i]
-        if gen_best_score > best_score:
-            best_score = gen_best_score
-            best = population[gen_best_i].copy()
-            best_gen = gen
+        # 2) raport (strict/partial) – tylko do logów i best_report
+        report_scores = evaluate_population(population, mode=cfg.report_mode)
+
+        gen_best_i = max(range(len(population)), key=lambda i: eval_scores[i])
+        gen_best_eval = eval_scores[gen_best_i]
+
+        # aktualizacja best_eval (na penalized)
+        if gen_best_eval > best_eval_score:
+            best_eval_score = gen_best_eval
+            best_eval = population[gen_best_i].copy()
+            best_eval_gen = gen
             no_improve = 0
         else:
             no_improve += 1
 
+        # aktualizacja best_report (na strict/partial) – szukamy najlepszej wartości raportowej
+        gen_best_report_i = max(range(len(population)), key=lambda i: report_scores[i])
+        gen_best_report = report_scores[gen_best_report_i]
+        if gen_best_report > best_report_score:
+            best_report_score = gen_best_report
+            best_report = population[gen_best_report_i].copy()
+            best_report_gen = gen
+
         if gen % log_every == 0 or gen == cfg.generations - 1:
-            avg = sum(scores) / max(1, len(scores))
+            avg_eval = sum(eval_scores) / max(1, len(eval_scores))
+            avg_report = sum(report_scores) / max(1, len(report_scores))
+
             feasible_cnt = sum(1 for ind in population if ind.is_feasible())
             feasible_rate = feasible_cnt / max(1, len(population))
+
             history.append({
                 "gen": gen,
-                "best": best_score,
-                "gen_best": gen_best_score,
-                "avg": avg,
+
+                # penalized (czym GA się uczy)
+                "best_eval": best_eval_score,
+                "gen_best_eval": gen_best_eval,
+                "avg_eval": avg_eval,
+
+                # strict/partial (co porównujesz z baseline)
+                "best_report": best_report_score,
+                "gen_best_report": gen_best_report,
+                "avg_report": avg_report,
+
                 "feasible_rate": feasible_rate,
             })
 
         if no_improve >= patience:
             break
 
+        # selekcja rodziców wg eval_scores (penalized)
         elite_idx = list(range(len(population)))
-        elite_idx.sort(key=lambda i: scores[i], reverse=True)
+        elite_idx.sort(key=lambda i: eval_scores[i], reverse=True)
         elites = [population[i].copy() for i in elite_idx[: cfg.elitism]]
 
         if cfg.selection == "threshold":
-            parents_pool = select_threshold(population, scores, cfg.threshold_keep_ratio)
+            parents_pool = select_threshold(population, eval_scores, cfg.threshold_keep_ratio)
+
             def pick_parent():
                 return random.choice(parents_pool)
         else:
             def pick_parent():
                 contenders = random.sample(range(len(population)), k=min(cfg.tournament_k, len(population)))
-                best_i = max(contenders, key=lambda i: scores[i])
+                best_i = max(contenders, key=lambda i: eval_scores[i])
                 return population[best_i]
 
         new_pop: List[Solution] = []
@@ -165,10 +205,16 @@ def run_ga(
 
         population = new_pop
 
+    # ZWRACAMY wynik raportowy jako "best_fitness" (dla benchmarku i porównań)
     return {
-        "best_fitness": best_score,
-        "best_solution": best,
-        "best_generation": best_gen,
+        "best_fitness": best_report_score,
+        "best_solution": best_report,
+        "best_generation": best_report_gen,
+
+        # dodatkowo: jak szło po penalized
+        "best_eval_fitness": best_eval_score,
+        "best_eval_generation": best_eval_gen,
+
         "history": history,
         "generations_ran": history[-1]["gen"] if history else 0,
     }
