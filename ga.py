@@ -72,51 +72,69 @@ def uniform_crossover(a: Solution, b: Solution, p_cross: float) -> Solution:
             child.containers[i] = b.containers[i].copy()
     return child
 
-
 def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
-    # Pobieramy listę już wstawionych pudełek, żeby wiedzieć, gdzie są przeszkody
-    placed_containers = [c for c in sol.containers if c.inserted]
-
+    """
+    Nowa mutacja typu "Ruin and Recreate".
+    Zamiast ruszać pojedyncze pudełka, wyrzucamy dużą część (np. 50%)
+    i próbujemy upakować je ponownie w innej kolejności.
+    """
+    
+    # 1. Najpierw drobne mutacje rotacji i obecności dla każdego pudełka
+    # (dajemy małą szansę na zmianę, czy pudełko w ogóle bierze udział w grze)
     for c in sol.containers:
-        # 1. Mutacja obrotu (to jest OK, ale po obrocie trzeba sprawdzić czy pasuje)
-        if random.random() < cfg.p_mut_rot:
-            original_dims = (c.dx, c.dy, c.dz)
+        # Rotacja (tylko jeśli pudełko nie jest włożone, żeby nie psuć ułożenia 'inserted')
+        # Jeśli jest włożone, rotację obsłużymy przy przepakowaniu (repack)
+        if not c.inserted and random.random() < cfg.p_mut_rot:
             c.choose_rotation_randomly()
-            # Jeśli po obrocie koliduje, cofnij obrót (proste zabezpieczenie)
-            # Uwaga: to uproszczenie, w idealnym świecie wyjmujemy i wkładamy od nowa
-            if c.inserted and not c.fits_in_magazine(): 
-                 c.dx, c.dy, c.dz = original_dims # cofamy
 
-        # 2. Mutacja "Move" -> ZAMIENIAMY NA "REPACK"
-        # Zamiast przesuwać o 5cm (co psuje), wyjmij pudełko i włóż je w inne miejsce
-        if c.inserted and random.random() < cfg.p_mut_move:
-            # Wyjmij pudełko (tymczasowo usuń z listy zajętych)
-            if c in placed_containers:
-                placed_containers.remove(c)
-            
-            c.inserted = False # resetujemy stan
+        # Mutacja obecności - próba dodania tych, co są 'out'
+        if not c.inserted and random.random() < cfg.p_mut_presence:
+            # Spróbuj dodać brakujące pudełko
+            obstacles = [x for x in sol.containers if x.inserted]
+            _place_supported_floor_first(c, obstacles, bias_inside=True)
+
+    # 2. GŁÓWNA MUTACJA: Bulk Repack (Przepakowanie grupowe)
+    # Używamy parametru p_mut_move jako szansy na uruchomienie "dużej zmiany"
+    if random.random() < cfg.p_mut_move:
+        
+        # Lista wszystkich aktualnie włożonych pudełek
+        placed = [c for c in sol.containers if c.inserted]
+        
+        # Jeśli nic nie ma, nie ma co przepakowywać
+        if not placed:
+            return
+
+        # Decydujemy ile wyrzucić. Dla trudnych instancji (Hard) wyrzucamy dużo (np. 40-50%)
+        # Żeby zrobić miejsce na nowe pomysły.
+        ratio_to_remove = 0.50 
+        n_remove = max(1, int(len(placed) * ratio_to_remove))
+        
+        # Wybieramy losowe pudełka do usunięcia
+        to_remove = random.sample(placed, k=min(n_remove, len(placed)))
+        
+        # Usuwamy je fizycznie z magazynu
+        for c in to_remove:
+            c.inserted = False
             c.x, c.y, c.z = None, None, None
 
-            # Spróbuj włożyć ponownie w losowe, ale LEGALNE miejsce
-            # Używamy Twojej funkcji z experiments.py
-            _place_supported_floor_first(c, placed_containers, bias_inside=True)
+        # Teraz mamy w magazynie tylko te, których NIE usunęliśmy (obstacles)
+        obstacles = [c for c in sol.containers if c.inserted]
 
+        # Mieszamy kolejność tych wyrzuconych (klucz do sukcesu!)
+        random.shuffle(to_remove)
+        
+        # Próbujemy włożyć je z powrotem
+        for c in to_remove:
+            # Przy okazji dajemy szansę na obrót
+            if random.random() < 0.5:
+                c.choose_rotation_randomly()
+            
+            # Wkładamy sprytnym algorytmem
+            _place_supported_floor_first(c, obstacles, bias_inside=True)
+            
+            # Jeśli się udało, staje się przeszkodą dla kolejnych
             if c.inserted:
-                placed_containers.append(c)
-
-        # 3. Mutacja obecności (czy w ogóle bierzemy pudełko)
-        if random.random() < cfg.p_mut_presence:
-            if c.inserted:
-                # Usuwamy
-                c.inserted = False
-                if c in placed_containers:
-                    placed_containers.remove(c)
-            else:
-                # Próbujemy dodać
-                _place_supported_floor_first(c, placed_containers, bias_inside=True)
-                if c.inserted:
-                    placed_containers.append(c)
-
+                obstacles.append(c)
 
 def run_ga(
     boxes: List[Dims],
