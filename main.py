@@ -13,7 +13,7 @@ def parse_args():
 
     p.add_argument("--seed", type=int, default=123)
     p.add_argument("--mode", type=str, default="strict", choices=["strict", "partial"])
-    p.add_argument("--ga_eval_mode", type=str, default="penalized", choices=["strict", "partial", "penalized"])
+    p.add_argument("--ga_eval_mode", type=str, default="strict", choices=["strict", "partial", "penalized"])
 
 
     p.add_argument("--pop", type=int, default=200)

@@ -6,26 +6,25 @@ from typing import Optional, List, Tuple
 
 Dims = Tuple[int, int, int]
 
-
+@dataclass
 class Container:
-    def __init__(self, length: int, width: int, height: int) -> None:
-        self.l = length
-        self.w = width
-        self.h = height
+    l: int
+    w: int
+    h: int
 
-        self.x: Optional[int] = None
-        self.y: Optional[int] = None
-        self.z: Optional[int] = None
+    x: Optional[int] = None
+    y: Optional[int] = None
+    z: Optional[int] = None
 
-        self.dx: Optional[int] = None
-        self.dy: Optional[int] = None
-        self.dz: Optional[int] = None
+    dx: Optional[int] = None
+    dy: Optional[int] = None
+    dz: Optional[int] = None
 
-        self.inserted: Optional[bool] = None
+    inserted: Optional[bool] = None
 
-        self.Wx: Optional[int] = None
-        self.Wy: Optional[int] = None
-        self.Wz: Optional[int] = None
+    Wx: Optional[int] = None
+    Wy: Optional[int] = None
+    Wz: Optional[int] = None
 
     def copy(self) -> "Container":
         c = Container(self.l, self.w, self.h)

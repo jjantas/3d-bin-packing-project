@@ -74,20 +74,48 @@ def uniform_crossover(a: Solution, b: Solution, p_cross: float) -> Solution:
 
 
 def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
-    placed: list[Container] = []
+    # Pobieramy listę już wstawionych pudełek, żeby wiedzieć, gdzie są przeszkody
+    placed_containers = [c for c in sol.containers if c.inserted]
+
     for c in sol.containers:
-        c.mutation(
-            prob_of_moving=cfg.p_mut_move,
-            prob_of_rotation=cfg.p_mut_rot,
-            prob_of_presence=cfg.p_mut_presence,
-            mutation_strength=cfg.mutation_strength,
-        )
+        # 1. Mutacja obrotu (to jest OK, ale po obrocie trzeba sprawdzić czy pasuje)
+        if random.random() < cfg.p_mut_rot:
+            original_dims = (c.dx, c.dy, c.dz)
+            c.choose_rotation_randomly()
+            # Jeśli po obrocie koliduje, cofnij obrót (proste zabezpieczenie)
+            # Uwaga: to uproszczenie, w idealnym świecie wyjmujemy i wkładamy od nowa
+            if c.inserted and not c.fits_in_magazine(): 
+                 c.dx, c.dy, c.dz = original_dims # cofamy
 
-        # naprawa podparcia / próbuj stawiać sensownie
-        if c.inserted and (random.random() < cfg.p_mut_resupport):
-            _place_supported_floor_first(c, placed, bias_inside=True)
+        # 2. Mutacja "Move" -> ZAMIENIAMY NA "REPACK"
+        # Zamiast przesuwać o 5cm (co psuje), wyjmij pudełko i włóż je w inne miejsce
+        if c.inserted and random.random() < cfg.p_mut_move:
+            # Wyjmij pudełko (tymczasowo usuń z listy zajętych)
+            if c in placed_containers:
+                placed_containers.remove(c)
+            
+            c.inserted = False # resetujemy stan
+            c.x, c.y, c.z = None, None, None
 
-        placed.append(c)
+            # Spróbuj włożyć ponownie w losowe, ale LEGALNE miejsce
+            # Używamy Twojej funkcji z experiments.py
+            _place_supported_floor_first(c, placed_containers, bias_inside=True)
+
+            if c.inserted:
+                placed_containers.append(c)
+
+        # 3. Mutacja obecności (czy w ogóle bierzemy pudełko)
+        if random.random() < cfg.p_mut_presence:
+            if c.inserted:
+                # Usuwamy
+                c.inserted = False
+                if c in placed_containers:
+                    placed_containers.remove(c)
+            else:
+                # Próbujemy dodać
+                _place_supported_floor_first(c, placed_containers, bias_inside=True)
+                if c.inserted:
+                    placed_containers.append(c)
 
 
 def run_ga(
