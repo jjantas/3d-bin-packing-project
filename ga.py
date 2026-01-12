@@ -132,9 +132,8 @@ def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
             # Wkładamy sprytnym algorytmem
             _place_supported_floor_first(c, obstacles, bias_inside=True)
             
-            # Jeśli się udało, staje się przeszkodą dla kolejnych
-            if c.inserted:
-                obstacles.append(c)
+            # Staje się przeszkodą dla kolejnych
+            obstacles.append(c)
 
 def run_ga(
     boxes: List[Dims],
