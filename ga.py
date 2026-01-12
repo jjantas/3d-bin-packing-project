@@ -92,6 +92,7 @@ def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
             # Spróbuj dodać brakujące pudełko
             obstacles = [x for x in sol.containers if x.inserted]
             _place_supported_floor_first(c, obstacles, bias_inside=True)
+            c.inserted = True
 
     # 2. GŁÓWNA MUTACJA: Bulk Repack (Przepakowanie grupowe)
     # Używamy parametru p_mut_move jako szansy na uruchomienie "dużej zmiany"
