@@ -132,6 +132,7 @@ def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
             
             # Wkładamy sprytnym algorytmem
             _place_supported_floor_first(c, obstacles, bias_inside=True)
+            c.inserted = True
             
             # Staje się przeszkodą dla kolejnych
             obstacles.append(c)
