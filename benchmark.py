@@ -143,21 +143,21 @@ def benchmark_basic(
     # 2) GA — kilka wariantów parametrów (mini grid)
     configs = [
         GAConfig(
-            pop_size=1000, generations=250,
-            fitness_mode="penalized",        # <--- selekcja na karach
-            report_mode=mode,                # <--- raport strict/partial
+            pop_size=500, generations=250,
+            fitness_mode="penalized",       
+            report_mode=mode,               
             p_mut_resupport=0.40, p_mut_move=0.10, p_crossover=0.8,
             init_strategy="constructive", init_constructive_ratio=1.0
         ),
         GAConfig(
-            pop_size=1500, generations=250,
+            pop_size=500, generations=250,
             fitness_mode="penalized",
             report_mode=mode,
             p_mut_resupport=0.40, p_mut_move=0.10, p_crossover=0.8,
             init_strategy="constructive", init_constructive_ratio=0.2
         ),
         GAConfig(
-            pop_size=2000, generations=400,
+            pop_size=500, generations=400,
             fitness_mode="penalized",
             report_mode=mode,
             p_mut_resupport=0.40, p_mut_move=0.15, p_crossover=0.9,
@@ -173,7 +173,7 @@ def benchmark_basic(
                 warehouse=warehouse,
                 seed=s,
                 cfg=cfg,
-                patience=20000,
+                patience=60,
                 log_every=5,
                 run_id=run_id
             ))

@@ -63,9 +63,9 @@ def fitness(solution: Solution, mode: FitnessMode = "strict") -> int:
 
     # kary: w tej instancji objętości są rzędu ~2000,
     # więc kary muszą być porównywalne / większe.
-    P_OUT = 300     # za jednostkę przekroczenia
-    P_OVER = 2000   # za każdą kolizję pary
-    P_FLOAT = 1500  # za każdy "wiszący" kontener
+    P_OUT = 20000     # za jednostkę przekroczenia
+    P_OVER = 10000   # za każdą kolizję pary
+    P_FLOAT = 2000  # za każdy "wiszący" kontener
 
     penalty = 0
 

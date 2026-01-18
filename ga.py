@@ -72,6 +72,38 @@ def uniform_crossover(a: Solution, b: Solution, p_cross: float) -> Solution:
             child.containers[i] = b.containers[i].copy()
     return child
 
+def try_insert_box(c: Container, obstacles: list[Container]) -> bool:
+    if None in (c.dx, c.dy, c.dz):
+        c.choose_rotation_randomly()
+
+    c.inserted = True
+    _place_supported_floor_first(c, obstacles, bias_inside=True)
+
+    # 1) musi mieć współrzędne i mieścić się
+    if None in (c.x, c.y, c.z) or (not c.fits_in_magazine()):
+        c.inserted = False
+        c.x, c.y, c.z = None, None, None
+        return False
+
+    # 2) nie może nachodzić na przeszkody
+    for o in obstacles:
+        if o.inserted and (not c.doesnt_overlap(o)):
+            c.inserted = False
+            c.x, c.y, c.z = None, None, None
+            return False
+
+    # 3) podparcie: jak z>0, musi overlap_xy z kimś kto ma top==z
+    if c.z > 0:
+        supported = any((o.z + o.dz) == c.z and c.overlaps_xy(o) for o in obstacles if o.inserted)
+        if not supported:
+            c.inserted = False
+            c.x, c.y, c.z = None, None, None
+            return False
+
+    return True
+
+
+
 def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
     """
     Nowa mutacja typu "Ruin and Recreate".
@@ -91,7 +123,7 @@ def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
         if not c.inserted and random.random() < cfg.p_mut_presence:
             # Spróbuj dodać brakujące pudełko
             obstacles = [x for x in sol.containers if x.inserted]
-            _place_supported_floor_first(c, obstacles, bias_inside=True)
+            try_insert_box(c, obstacles)
 
     # 2. GŁÓWNA MUTACJA: Bulk Repack (Przepakowanie grupowe)
     # Używamy parametru p_mut_move jako szansy na uruchomienie "dużej zmiany"
@@ -106,7 +138,7 @@ def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
 
         # Decydujemy ile wyrzucić. Dla trudnych instancji (Hard) wyrzucamy dużo (np. 40-50%)
         # Żeby zrobić miejsce na nowe pomysły.
-        ratio_to_remove = 0.50 
+        ratio_to_remove = 0.20 
         n_remove = max(1, int(len(placed) * ratio_to_remove))
         
         # Wybieramy losowe pudełka do usunięcia
@@ -130,10 +162,8 @@ def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
                 c.choose_rotation_randomly()
             
             # Wkładamy sprytnym algorytmem
-            _place_supported_floor_first(c, obstacles, bias_inside=True)
-            
-            # Jeśli się udało, staje się przeszkodą dla kolejnych
-            if c.inserted:
+            ok = try_insert_box(c, obstacles)
+            if ok:
                 obstacles.append(c)
 
 def run_ga(
@@ -206,17 +236,9 @@ def run_ga(
 
             history.append({
                 "gen": gen,
-
-                # penalized (czym GA się uczy)
-                "best_eval": best_eval_score,
-                "gen_best_eval": gen_best_eval,
-                "avg_eval": avg_eval,
-
-                # strict/partial (co porównujesz z baseline)
-                "best_report": best_report_score,
-                "gen_best_report": gen_best_report,
-                "avg_report": avg_report,
-
+                "best": best_eval_score,
+                "gen_best": gen_best_eval,
+                "avg": avg_eval,
                 "feasible_rate": feasible_rate,
             })
 

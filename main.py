@@ -91,7 +91,7 @@ def main():
             boxes_csv=args.boxes_csv if args.boxes_csv else "data/boxes.csv",
             warehouse=warehouse,
             mode=args.mode,
-            seeds=[0, 1, 2, 3, 4],
+            seeds=[0, 1, 2],
         )
         return
 
@@ -111,6 +111,7 @@ def main():
         mutation_strength=args.strength,
         p_mut_resupport=args.presupport,
         fitness_mode=args.mode,
+
     )
 
     result = run_ga(
