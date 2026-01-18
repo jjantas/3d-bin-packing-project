@@ -190,28 +190,25 @@ def read_convergence_files(pattern: str) -> List[Tuple[str, List[Dict[str, Any]]
 
 
 def plot_convergence(convergence_rows: List[Dict[str, Any]], title: str, out_path: str) -> None:
-    """
-    Rysuje 3 osobne wykresy (osobne PNG) albo 1 wykres na 3 serie?
-    Zrobimy 2 PNG:
-      - best & avg
-      - feasible_rate
-    """
     # parse
     data = []
     for r in convergence_rows:
         gen = to_int(r.get("gen", 0))
-        best = to_float(r.get("best", 0))
-        avg = to_float(r.get("avg", 0))
-        fr = to_float(r.get("feasible_rate", 0))
-        data.append((gen, best, avg, fr))
-    data.sort(key=lambda t: t[0])
 
+        # preferuj report (strict/partial), ale jak nie ma, weź eval (penalized)
+        best = to_float(r.get("best_report", r.get("best_eval", r.get("best", 0))))
+        avg  = to_float(r.get("avg_report",  r.get("avg_eval",  r.get("avg", 0))))
+        fr   = to_float(r.get("feasible_rate", 0))
+
+        data.append((gen, best, avg, fr))
+
+    data.sort(key=lambda t: t[0])
     gens = [t[0] for t in data]
     bests = [t[1] for t in data]
     avgs = [t[2] for t in data]
     frs = [t[3] for t in data]
 
-    base, ext = os.path.splitext(out_path)
+    base, _ = os.path.splitext(out_path)
 
     # best & avg
     plt.figure()
@@ -219,7 +216,7 @@ def plot_convergence(convergence_rows: List[Dict[str, Any]], title: str, out_pat
     plt.plot(gens, avgs, label="avg")
     plt.xlabel("generation")
     plt.ylabel("fitness")
-    plt.title(title + " (fitness)")
+    plt.title(title + " (report fitness)")
     plt.legend()
     plt.tight_layout()
     plt.savefig(base + "_fitness.png")
