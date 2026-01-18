@@ -33,6 +33,7 @@ class GAConfig:
     p_mut_move: float = 0.25
     p_mut_rot: float = 0.10
     p_mut_presence: float = 0.05
+    p_mut_resupport: float = 0.20
     mutation_strength: float = 0.15
 
     ratio_to_remove: float = 0.20  # ratio of placed boxes to remove during "ruin and recreate"
