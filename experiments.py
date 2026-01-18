@@ -159,7 +159,7 @@ def random_solution(
             c.place_randomly(bias_inside=bias_inside)
 
         else:
-            # constructive: Twoje floor-first + supporters + no-overlap
+            # constructive: floor-first + supporters + no-overlap
             if not c.inserted:
                 c.place_randomly(bias_inside=bias_inside)
             else:
