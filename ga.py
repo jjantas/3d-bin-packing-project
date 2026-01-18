@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 from typing import List, Literal, Dict, Any
+
 from models import Solution, Dims, Container
 from experiments import random_solution, _place_supported_floor_first, InitStrategy
 from fitness import fitness, FitnessMode
@@ -34,7 +35,7 @@ class GAConfig:
     p_mut_presence: float = 0.05
     mutation_strength: float = 0.15
 
-    p_mut_resupport: float = 0.20
+    ratio_to_remove: float = 0.20  # ratio of placed boxes to remove during "ruin and recreate"
 
     # KLUCZ: na czym GA selekcjonuje (gradient)
     fitness_mode: FitnessMode = "penalized"
@@ -138,7 +139,7 @@ def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
 
         # Decydujemy ile wyrzucić. Dla trudnych instancji (Hard) wyrzucamy dużo (np. 40-50%)
         # Żeby zrobić miejsce na nowe pomysły.
-        ratio_to_remove = 0.20 
+        ratio_to_remove = max(0.0, min(1.0, cfg.ratio_to_remove))
         n_remove = max(1, int(len(placed) * ratio_to_remove))
         
         # Wybieramy losowe pudełka do usunięcia
@@ -236,11 +237,20 @@ def run_ga(
 
             history.append({
                 "gen": gen,
-                "best": best_eval_score,
-                "gen_best": gen_best_eval,
-                "avg": avg_eval,
+
+                # penalized (gradient)
+                "best_eval": best_eval_score,
+                "gen_best_eval": gen_best_eval,
+                "avg_eval": avg_eval,
+
+                # report (strict/partial - real quality)
+                "best_report": best_report_score,
+                "gen_best_report": gen_best_report,
+                "avg_report": avg_report,
+
                 "feasible_rate": feasible_rate,
             })
+
 
         if no_improve >= patience:
             break

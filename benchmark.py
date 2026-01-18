@@ -87,6 +87,7 @@ def run_one_ga(boxes, warehouse, seed: int, cfg: GAConfig, patience: int, log_ev
             "report_mode": cfg.report_mode,
             "pop": cfg.pop_size,
             "generations": cfg.generations,
+            "ratio_to_remove": cfg.ratio_to_remove
         })
         hist.append(out)
     write_csv(conv_path, hist)
@@ -112,6 +113,7 @@ def run_one_ga(boxes, warehouse, seed: int, cfg: GAConfig, patience: int, log_ev
         "utilization": util,
         "best_generation": res["best_generation"],
         "seconds": (t1 - t0),
+        "ratio_to_remove": cfg.ratio_to_remove
     }
 
 
