@@ -8,13 +8,17 @@ from viz import plot_solution
 from io_utils import load_boxes_from_csv
 from benchmark import benchmark_basic
 
+
 def parse_args():
     p = argparse.ArgumentParser()
 
     p.add_argument("--seed", type=int, default=123)
-    p.add_argument("--mode", type=str, default="strict", choices=["strict", "partial"])
-    p.add_argument("--ga_eval_mode", type=str, default="strict", choices=["strict", "partial", "penalized"])
 
+    # report mode (to, co porównujesz z baseline)
+    p.add_argument("--mode", type=str, default="strict", choices=["strict", "partial"])
+
+    # eval/selection mode (gradient dla GA)
+    p.add_argument("--ga_eval_mode", type=str, default="penalized", choices=["strict", "partial", "penalized"])
 
     p.add_argument("--pop", type=int, default=200)
     p.add_argument("--gen", type=int, default=300)
@@ -30,12 +34,12 @@ def parse_args():
     p.add_argument("--pmove", type=float, default=0.25)
     p.add_argument("--prot", type=float, default=0.10)
     p.add_argument("--ppres", type=float, default=0.05)
+    p.add_argument("--presupport", type=float, default=0.20, help="probability of resupport pass after mutation")
     p.add_argument("--strength", type=float, default=0.15)
     p.add_argument("--presence_init", type=float, default=0.7)
 
+    p.add_argument("--ratio_to_remove", type=float, default=0.20, help="ratio of placed boxes to remove in bulk repack")
 
-    # NOWE:
-    p.add_argument("--presupport", type=float, default=0.20, help="probability of resupport after mutation")
     p.add_argument("--boxes_csv", type=str, default=None, help="path to csv with boxes (l,w,h) and optional Wx,Wy,Wz")
     p.add_argument("--warehouse", nargs=3, type=int, default=None, metavar=("Wx", "Wy", "Wz"))
 
@@ -43,7 +47,6 @@ def parse_args():
     p.add_argument("--plot", action="store_true")
 
     p.add_argument("--benchmark", action="store_true", help="run benchmark suite and save runs/summary.csv")
-
 
     return p.parse_args()
 
@@ -91,28 +94,33 @@ def main():
         benchmark_basic(
             boxes_csv=args.boxes_csv if args.boxes_csv else "data/boxes.csv",
             warehouse=warehouse,
-            mode=args.mode,
+            mode=args.mode,   # report_mode w benchmarku
             seeds=[0, 1, 2],
         )
         return
-
 
     cfg = GAConfig(
         pop_size=args.pop,
         generations=args.gen,
         prob_presence_init=args.presence_init,
+
         selection=args.selection,
         threshold_keep_ratio=args.keep_ratio,
         tournament_k=args.tournament_k,
+
         p_crossover=args.pcross,
         elitism=args.elitism,
+
         p_mut_move=args.pmove,
         p_mut_rot=args.prot,
         p_mut_presence=args.ppres,
-        mutation_strength=args.strength,
         p_mut_resupport=args.presupport,
-        fitness_mode=args.mode,
 
+        mutation_strength=args.strength,
+        ratio_to_remove=args.ratio_to_remove,
+
+        fitness_mode=args.ga_eval_mode,  # ✅ selekcja/gradient
+        report_mode=args.mode,           # ✅ porównywalne wyniki
     )
 
     result = run_ga(
@@ -127,24 +135,41 @@ def main():
     print("Best fitness:", result["best_fitness"], "best gen:", result["best_generation"])
     meta = {
         "seed": args.seed,
-        "mode": args.mode,
+        "report_mode": args.mode,
+        "eval_mode": args.ga_eval_mode,
+
         "pop": args.pop,
         "gen": args.gen,
+        "patience": args.patience,
+
         "selection": args.selection,
+        "keep_ratio": args.keep_ratio,
+        "tournament_k": args.tournament_k,
+
         "pcross": args.pcross,
         "elitism": args.elitism,
+
         "pmove": args.pmove,
         "prot": args.prot,
         "ppres": args.ppres,
-        "strength": args.strength,
         "presupport": args.presupport,
+
+        "strength": args.strength,
+        "ratio_to_remove": args.ratio_to_remove,
+
+        "presence_init": args.presence_init,
+
         "warehouse": str(warehouse),
         "n_boxes": len(boxes),
     }
     write_history_csv(args.csv, result["history"], meta)
 
     if args.plot and result["best_solution"] is not None:
-        plot_solution(result["best_solution"], warehouse, title=f"3D Bin Packing, Warehouse={warehouse}, Fitness={result['best_fitness']:.2f}")
+        plot_solution(
+            result["best_solution"],
+            warehouse,
+            title=f"3D Bin Packing, Warehouse={warehouse}, Fitness={result['best_fitness']:.2f}"
+        )
 
 
 if __name__ == "__main__":

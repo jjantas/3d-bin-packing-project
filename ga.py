@@ -14,6 +14,7 @@ GAInitMode = Literal["constructive", "random", "mixed"]
 # raportujemy tylko "prawdziwy" wynik: strict albo partial
 ReportMode = Literal["strict", "partial"]
 
+
 @dataclass
 class GAConfig:
     pop_size: int = 200
@@ -33,6 +34,10 @@ class GAConfig:
     p_mut_move: float = 0.25
     p_mut_rot: float = 0.10
     p_mut_presence: float = 0.05
+
+    # dodatkowa "naprawcza" mutacja wsparcia / repozycjonowania (po bulk repack)
+    p_mut_resupport: float = 0.20
+
     mutation_strength: float = 0.15
 
     ratio_to_remove: float = 0.20  # ratio of placed boxes to remove during "ruin and recreate"
@@ -73,6 +78,7 @@ def uniform_crossover(a: Solution, b: Solution, p_cross: float) -> Solution:
             child.containers[i] = b.containers[i].copy()
     return child
 
+
 def try_insert_box(c: Container, obstacles: list[Container]) -> bool:
     if None in (c.dx, c.dy, c.dz):
         c.choose_rotation_randomly()
@@ -104,68 +110,82 @@ def try_insert_box(c: Container, obstacles: list[Container]) -> bool:
     return True
 
 
+def _resupport_pass(sol: Solution, cfg: GAConfig) -> None:
+    """
+    Lekka "naprawa": próbujemy repozycjonować część aktualnie włożonych pudełek,
+    żeby były podparte i bez kolizji.
+    """
+    if cfg.p_mut_resupport <= 0:
+        return
+
+    inserted = [c for c in sol.containers if c.inserted]
+    if len(inserted) <= 1:
+        return
+
+    # iterujemy w losowej kolejności, żeby nie faworyzować indeksów
+    random.shuffle(inserted)
+
+    for c in inserted:
+        if random.random() > cfg.p_mut_resupport:
+            continue
+
+        # wyjmij na chwilę
+        c.inserted = False
+        c.x, c.y, c.z = None, None, None
+
+        obstacles = [o for o in sol.containers if o.inserted]
+        ok = try_insert_box(c, obstacles)
+
+        if not ok:
+            # jeśli nie da się włożyć poprawnie, zostawiamy wyjęte (to też jest sensowna mutacja)
+            pass
+
 
 def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
     """
-    Nowa mutacja typu "Ruin and Recreate".
-    Zamiast ruszać pojedyncze pudełka, wyrzucamy dużą część (np. 50%)
-    i próbujemy upakować je ponownie w innej kolejności.
+    Mutacja typu "Ruin and Recreate" + drobne próby wstawiania brakujących boxów
+    + opcjonalny resupport-pass.
     """
-    
-    # 1. Najpierw drobne mutacje rotacji i obecności dla każdego pudełka
-    # (dajemy małą szansę na zmianę, czy pudełko w ogóle bierze udział w grze)
+
+    # 1) Drobne mutacje rotacji i obecności dla boxów NIEwłożonych
     for c in sol.containers:
-        # Rotacja (tylko jeśli pudełko nie jest włożone, żeby nie psuć ułożenia 'inserted')
-        # Jeśli jest włożone, rotację obsłużymy przy przepakowaniu (repack)
         if not c.inserted and random.random() < cfg.p_mut_rot:
             c.choose_rotation_randomly()
 
-        # Mutacja obecności - próba dodania tych, co są 'out'
         if not c.inserted and random.random() < cfg.p_mut_presence:
-            # Spróbuj dodać brakujące pudełko
             obstacles = [x for x in sol.containers if x.inserted]
             try_insert_box(c, obstacles)
 
-    # 2. GŁÓWNA MUTACJA: Bulk Repack (Przepakowanie grupowe)
-    # Używamy parametru p_mut_move jako szansy na uruchomienie "dużej zmiany"
+    # 2) GŁÓWNA MUTACJA: Bulk Repack (Przepakowanie grupowe)
     if random.random() < cfg.p_mut_move:
-        
-        # Lista wszystkich aktualnie włożonych pudełek
         placed = [c for c in sol.containers if c.inserted]
-        
-        # Jeśli nic nie ma, nie ma co przepakowywać
         if not placed:
             return
 
-        # Decydujemy ile wyrzucić. Dla trudnych instancji (Hard) wyrzucamy dużo (np. 40-50%)
-        # Żeby zrobić miejsce na nowe pomysły.
         ratio_to_remove = max(0.0, min(1.0, cfg.ratio_to_remove))
         n_remove = max(1, int(len(placed) * ratio_to_remove))
-        
-        # Wybieramy losowe pudełka do usunięcia
+
         to_remove = random.sample(placed, k=min(n_remove, len(placed)))
-        
-        # Usuwamy je fizycznie z magazynu
+
         for c in to_remove:
             c.inserted = False
             c.x, c.y, c.z = None, None, None
 
-        # Teraz mamy w magazynie tylko te, których NIE usunęliśmy (obstacles)
         obstacles = [c for c in sol.containers if c.inserted]
 
-        # Mieszamy kolejność tych wyrzuconych (klucz do sukcesu!)
         random.shuffle(to_remove)
-        
-        # Próbujemy włożyć je z powrotem
+
         for c in to_remove:
-            # Przy okazji dajemy szansę na obrót
             if random.random() < 0.5:
                 c.choose_rotation_randomly()
-            
-            # Wkładamy sprytnym algorytmem
+
             ok = try_insert_box(c, obstacles)
             if ok:
                 obstacles.append(c)
+
+    # 3) Opcjonalny resupport pass (naprawczy / eksploracyjny)
+    _resupport_pass(sol, cfg)
+
 
 def run_ga(
     boxes: List[Dims],
@@ -188,13 +208,13 @@ def run_ga(
         for _ in range(cfg.pop_size)
     ]
 
-    # najlepszy wg penalized (do prowadzenia selekcji)
+    # najlepszy wg fitness_mode (do prowadzenia selekcji)
     best_eval: Solution | None = None
     best_eval_score = -1
     best_eval_gen = 0
     no_improve = 0
 
-    # najlepszy FEASIBLE wg report_mode (do raportu / porównania z baseline)
+    # najlepszy wg report_mode (do raportu / porównania z baseline)
     best_report: Solution | None = None
     best_report_score = -1
     best_report_gen = 0
@@ -202,16 +222,12 @@ def run_ga(
     history = []
 
     for gen in range(cfg.generations):
-        # 1) główna ocena (gradient)
         eval_scores = evaluate_population(population, mode=cfg.fitness_mode)
-
-        # 2) raport (strict/partial) – tylko do logów i best_report
         report_scores = evaluate_population(population, mode=cfg.report_mode)
 
         gen_best_i = max(range(len(population)), key=lambda i: eval_scores[i])
         gen_best_eval = eval_scores[gen_best_i]
 
-        # aktualizacja best_eval (na penalized)
         if gen_best_eval > best_eval_score:
             best_eval_score = gen_best_eval
             best_eval = population[gen_best_i].copy()
@@ -220,7 +236,6 @@ def run_ga(
         else:
             no_improve += 1
 
-        # aktualizacja best_report (na strict/partial) – szukamy najlepszej wartości raportowej
         gen_best_report_i = max(range(len(population)), key=lambda i: report_scores[i])
         gen_best_report = report_scores[gen_best_report_i]
         if gen_best_report > best_report_score:
@@ -238,12 +253,12 @@ def run_ga(
             history.append({
                 "gen": gen,
 
-                # penalized (gradient)
+                # fitness_mode (gradient)
                 "best_eval": best_eval_score,
                 "gen_best_eval": gen_best_eval,
                 "avg_eval": avg_eval,
 
-                # report (strict/partial - real quality)
+                # report_mode (real quality)
                 "best_report": best_report_score,
                 "gen_best_report": gen_best_report,
                 "avg_report": avg_report,
@@ -251,11 +266,9 @@ def run_ga(
                 "feasible_rate": feasible_rate,
             })
 
-
         if no_improve >= patience:
             break
 
-        # selekcja rodziców wg eval_scores (penalized)
         elite_idx = list(range(len(population)))
         elite_idx.sort(key=lambda i: eval_scores[i], reverse=True)
         elites = [population[i].copy() for i in elite_idx[: cfg.elitism]]
@@ -283,13 +296,11 @@ def run_ga(
 
         population = new_pop
 
-    # ZWRACAMY wynik raportowy jako "best_fitness" (dla benchmarku i porównań)
     return {
         "best_fitness": best_report_score,
         "best_solution": best_report,
         "best_generation": best_report_gen,
 
-        # dodatkowo: jak szło po penalized
         "best_eval_fitness": best_eval_score,
         "best_eval_generation": best_eval_gen,
 
