@@ -8,7 +8,7 @@ from models import Container, Dims
 def make_containers(boxes: List[Dims], warehouse: Dims) -> List[Container]:
     Wx, Wy, Wz = warehouse
     containers = []
-    for (l, w, h) in boxes:
+    for l, w, h in boxes:
         c = Container(l, w, h)
         c.pick_warehouse(Wx, Wy, Wz)
         containers.append(c)
@@ -35,7 +35,10 @@ def load_boxes_from_csv(path: str) -> Tuple[List[Dims], Optional[Dims]]:
     # wykryj czy pierwszy wiersz to nagłówek
     header = [c.strip() for c in rows[0]]
     header_lower = [c.lower() for c in header]
-    has_header = any(x in header_lower for x in ["l", "w", "h", "length", "width", "height", "wx", "wy", "wz"])
+    has_header = any(
+        x in header_lower
+        for x in ["l", "w", "h", "length", "width", "height", "wx", "wy", "wz"]
+    )
 
     if has_header:
         col_index = {name: i for i, name in enumerate(header_lower)}
@@ -61,7 +64,12 @@ def load_boxes_from_csv(path: str) -> Tuple[List[Dims], Optional[Dims]]:
             Wx = get_int(row, "wx")
             Wy = get_int(row, "wy")
             Wz = get_int(row, "wz")
-            if warehouse is None and Wx is not None and Wy is not None and Wz is not None:
+            if (
+                warehouse is None
+                and Wx is not None
+                and Wy is not None
+                and Wz is not None
+            ):
                 warehouse = (Wx, Wy, Wz)
 
     else:

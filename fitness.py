@@ -5,8 +5,10 @@ from models import Solution, Container
 
 FitnessMode = Literal["strict", "partial", "penalized"]
 
+
 def container_volume(c: Container) -> int:
     return int(c.l * c.w * c.h)
+
 
 def _is_supported(c: Container, accepted: list[Container]) -> bool:
     if c.z == 0:
@@ -15,6 +17,7 @@ def _is_supported(c: Container, accepted: list[Container]) -> bool:
         if (b.z + b.dz) == c.z and c.overlaps_xy(b):
             return True
     return False
+
 
 def _out_of_bounds_penalty(c: Container) -> int:
     # kara za przekroczenia w osiach (w jednostkach długości)
@@ -26,6 +29,7 @@ def _out_of_bounds_penalty(c: Container) -> int:
     py = max(0, c.y + c.dy - Wy) + max(0, -c.y)
     pz = max(0, c.z + c.dz - Wz) + max(0, -c.z)
     return px + py + pz
+
 
 def fitness(solution: Solution, mode: FitnessMode = "strict") -> int:
     if mode == "strict":
@@ -63,8 +67,8 @@ def fitness(solution: Solution, mode: FitnessMode = "strict") -> int:
 
     # kary: w tej instancji objętości są rzędu ~2000,
     # więc kary muszą być porównywalne / większe.
-    P_OUT = 20000     # za jednostkę przekroczenia
-    P_OVER = 10000   # za każdą kolizję pary
+    P_OUT = 20000  # za jednostkę przekroczenia
+    P_OVER = 10000  # za każdą kolizję pary
     P_FLOAT = 2000  # za każdy "wiszący" kontener
 
     penalty = 0

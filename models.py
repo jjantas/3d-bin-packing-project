@@ -6,6 +6,7 @@ from typing import Optional, List, Tuple
 
 Dims = Tuple[int, int, int]
 
+
 @dataclass
 class Container:
     l: int
@@ -74,8 +75,12 @@ class Container:
         return fits_on_x and fits_on_y and fits_on_z
 
     def overlaps_xy(self, other: "Container") -> bool:
-        overlaps_on_x = not ((self.x + self.dx <= other.x) or (other.x + other.dx <= self.x))
-        overlaps_on_y = not ((self.y + self.dy <= other.y) or (other.y + other.dy <= self.y))
+        overlaps_on_x = not (
+            (self.x + self.dx <= other.x) or (other.x + other.dx <= self.x)
+        )
+        overlaps_on_y = not (
+            (self.y + self.dy <= other.y) or (other.y + other.dy <= self.y)
+        )
         return overlaps_on_x and overlaps_on_y
 
     def doesnt_overlap(self, other: "Container") -> bool:
@@ -84,9 +89,15 @@ class Container:
         if None in (other.x, other.y, other.z, other.dx, other.dy, other.dz):
             raise ValueError("Other container not fully initialized.")
 
-        overlaps_on_x = not ((self.x + self.dx <= other.x) or (other.x + other.dx <= self.x))
-        overlaps_on_y = not ((self.y + self.dy <= other.y) or (other.y + other.dy <= self.y))
-        overlaps_on_z = not ((self.z + self.dz <= other.z) or (other.z + other.dz <= self.z))
+        overlaps_on_x = not (
+            (self.x + self.dx <= other.x) or (other.x + other.dx <= self.x)
+        )
+        overlaps_on_y = not (
+            (self.y + self.dy <= other.y) or (other.y + other.dy <= self.y)
+        )
+        overlaps_on_z = not (
+            (self.z + self.dz <= other.z) or (other.z + other.dz <= self.z)
+        )
         return not (overlaps_on_x and overlaps_on_y and overlaps_on_z)
 
     def move_randomly(self, strength: float) -> None:

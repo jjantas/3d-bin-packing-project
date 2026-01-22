@@ -1,6 +1,5 @@
 # src/binpack3d/viz.py
 from __future__ import annotations
-from typing import Tuple
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from models import Solution, Dims
@@ -57,4 +56,3 @@ def plot_solution(sol: Solution, warehouse: Dims, title: str = "") -> None:
     out_path = os.path.join("viz", f"{title.replace(' ', '_')}.png")
     plt.savefig(out_path)
     plt.show()
-

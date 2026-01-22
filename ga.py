@@ -40,7 +40,9 @@ class GAConfig:
 
     mutation_strength: float = 0.15
 
-    ratio_to_remove: float = 0.20  # ratio of placed boxes to remove during "ruin and recreate"
+    ratio_to_remove: float = (
+        0.20  # ratio of placed boxes to remove during "ruin and recreate"
+    )
 
     # KLUCZ: na czym GA selekcjonuje (gradient)
     fitness_mode: FitnessMode = "penalized"
@@ -54,14 +56,20 @@ def _pick_init_mode(cfg: GAConfig) -> InitStrategy:
         return "constructive"
     if cfg.init_strategy == "random":
         return "pure_random"
-    return "constructive" if random.random() < cfg.init_constructive_ratio else "pure_random"
+    return (
+        "constructive"
+        if random.random() < cfg.init_constructive_ratio
+        else "pure_random"
+    )
 
 
 def evaluate_population(pop: List[Solution], mode: FitnessMode) -> List[int]:
     return [fitness(ind, mode=mode) for ind in pop]
 
 
-def select_threshold(pop: List[Solution], scores: List[int], keep_ratio: float) -> List[Solution]:
+def select_threshold(
+    pop: List[Solution], scores: List[int], keep_ratio: float
+) -> List[Solution]:
     idx = list(range(len(pop)))
     idx.sort(key=lambda i: scores[i], reverse=True)
     k = max(2, int(round(len(pop) * keep_ratio)))
@@ -101,7 +109,9 @@ def try_insert_box(c: Container, obstacles: list[Container]) -> bool:
 
     # 3) podparcie: jak z>0, musi overlap_xy z kimś kto ma top==z
     if c.z > 0:
-        supported = any((o.z + o.dz) == c.z and c.overlaps_xy(o) for o in obstacles if o.inserted)
+        supported = any(
+            (o.z + o.dz) == c.z and c.overlaps_xy(o) for o in obstacles if o.inserted
+        )
         if not supported:
             c.inserted = False
             c.x, c.y, c.z = None, None, None
@@ -230,7 +240,6 @@ def run_ga(
 
         if gen_best_eval > best_eval_score:
             best_eval_score = gen_best_eval
-            best_eval = population[gen_best_i].copy()
             best_eval_gen = gen
             no_improve = 0
         else:
@@ -250,21 +259,20 @@ def run_ga(
             feasible_cnt = sum(1 for ind in population if ind.is_feasible())
             feasible_rate = feasible_cnt / max(1, len(population))
 
-            history.append({
-                "gen": gen,
-
-                # fitness_mode (gradient)
-                "best_eval": best_eval_score,
-                "gen_best_eval": gen_best_eval,
-                "avg_eval": avg_eval,
-
-                # report_mode (real quality)
-                "best_report": best_report_score,
-                "gen_best_report": gen_best_report,
-                "avg_report": avg_report,
-
-                "feasible_rate": feasible_rate,
-            })
+            history.append(
+                {
+                    "gen": gen,
+                    # fitness_mode (gradient)
+                    "best_eval": best_eval_score,
+                    "gen_best_eval": gen_best_eval,
+                    "avg_eval": avg_eval,
+                    # report_mode (real quality)
+                    "best_report": best_report_score,
+                    "gen_best_report": gen_best_report,
+                    "avg_report": avg_report,
+                    "feasible_rate": feasible_rate,
+                }
+            )
 
         if no_improve >= patience:
             break
@@ -274,13 +282,18 @@ def run_ga(
         elites = [population[i].copy() for i in elite_idx[: cfg.elitism]]
 
         if cfg.selection == "threshold":
-            parents_pool = select_threshold(population, eval_scores, cfg.threshold_keep_ratio)
+            parents_pool = select_threshold(
+                population, eval_scores, cfg.threshold_keep_ratio
+            )
 
             def pick_parent():
                 return random.choice(parents_pool)
         else:
+
             def pick_parent():
-                contenders = random.sample(range(len(population)), k=min(cfg.tournament_k, len(population)))
+                contenders = random.sample(
+                    range(len(population)), k=min(cfg.tournament_k, len(population))
+                )
                 best_i = max(contenders, key=lambda i: eval_scores[i])
                 return population[best_i]
 
@@ -300,10 +313,8 @@ def run_ga(
         "best_fitness": best_report_score,
         "best_solution": best_report,
         "best_generation": best_report_gen,
-
         "best_eval_fitness": best_eval_score,
         "best_eval_generation": best_eval_gen,
-
         "history": history,
         "generations_ran": history[-1]["gen"] if history else 0,
     }

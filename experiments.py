@@ -9,6 +9,7 @@ from fitness import fitness, FitnessMode
 
 InitStrategy = Literal["constructive", "pure_random"]
 
+
 def _rand_int_clamped(lo: int, hi: int) -> int:
     if hi < lo:
         return lo
@@ -130,7 +131,9 @@ def _place_supported_floor_first(
     """
     if _try_place_on_floor(c, placed, bias_inside=bias_inside, trials=floor_trials):
         return
-    if _try_place_on_supporters(c, placed, bias_inside=bias_inside, trials=support_trials):
+    if _try_place_on_supporters(
+        c, placed, bias_inside=bias_inside, trials=support_trials
+    ):
         return
 
     # fallback — cokolwiek, żeby nie było None
@@ -185,7 +188,8 @@ def random_search(
     for _ in range(trials):
         # UWAGA: random_search zostawiamy "constructive" żeby baseline był mocny i stabilny
         sol = random_solution(
-            boxes, warehouse,
+            boxes,
+            warehouse,
             prob_presence=prob_presence,
             bias_inside=True,
             init="constructive",

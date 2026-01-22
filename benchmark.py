@@ -117,13 +117,15 @@ def run_one_ga(
     hist = []
     for row in res["history"]:
         out = dict(row)
-        out.update({
-            "algo": "ga",
-            "run_id": run_id,
-            "cfg_id": cfg_id,
-            "seed": seed,
-            **cfg_dict,
-        })
+        out.update(
+            {
+                "algo": "ga",
+                "run_id": run_id,
+                "cfg_id": cfg_id,
+                "seed": seed,
+                **cfg_dict,
+            }
+        )
         hist.append(out)
     write_csv(conv_path, hist)
 
@@ -133,15 +135,12 @@ def run_one_ga(
         "run_id": run_id,
         "cfg_id": cfg_id,
         "seed": seed,
-
         "best_fitness": best,
         "utilization": util,
         "best_generation": res["best_generation"],
         "best_eval_fitness": res["best_eval_fitness"],
         "best_eval_generation": res["best_eval_generation"],
-
         "seconds": (t1 - t0),
-
         **cfg_dict,
         "patience": patience,
         "log_every": log_every,
@@ -154,10 +153,10 @@ def run_one_ga(
 def make_grid_A(report_mode: str) -> List[GAConfig]:
     # Operator grid (tuning)
     ratio_to_remove_grid = [0.10, 0.20, 0.35, 0.50]  # 4
-    pmove_grid = [0.10, 0.20, 0.35]                  # 3
-    presupport_grid = [0.0, 0.20, 0.40]              # 3
-    init_ratio_grid = [0.2, 1.0]                     # 2
-    pcross_grid = [0.7, 0.9]                         # 2
+    pmove_grid = [0.10, 0.20, 0.35]  # 3
+    presupport_grid = [0.0, 0.20, 0.40]  # 3
+    init_ratio_grid = [0.2, 1.0]  # 2
+    pcross_grid = [0.7, 0.9]  # 2
 
     # Fixed budget for Phase A
     POP_SIZE = 300
@@ -173,37 +172,34 @@ def make_grid_A(report_mode: str) -> List[GAConfig]:
     PRESENCE_INIT = 0.70
 
     cfgs: List[GAConfig] = []
-    for (rtr, pmove, pres, init_ratio, pcross) in product(
+    for rtr, pmove, pres, init_ratio, pcross in product(
         ratio_to_remove_grid,
         pmove_grid,
         presupport_grid,
         init_ratio_grid,
         pcross_grid,
     ):
-        cfgs.append(GAConfig(
-            pop_size=POP_SIZE,
-            generations=GENERATIONS,
-
-            fitness_mode="penalized",
-            report_mode=report_mode,
-
-            init_strategy="mixed",
-            init_constructive_ratio=init_ratio,
-
-            selection=SELECTION,
-            tournament_k=TOURNAMENT_K,
-            elitism=ELITISM,
-
-            p_crossover=pcross,
-            p_mut_move=pmove,
-            ratio_to_remove=rtr,
-            p_mut_resupport=pres,
-
-            p_mut_rot=P_ROT,
-            p_mut_presence=P_PRES,
-            mutation_strength=MUT_STRENGTH,
-            prob_presence_init=PRESENCE_INIT,
-        ))
+        cfgs.append(
+            GAConfig(
+                pop_size=POP_SIZE,
+                generations=GENERATIONS,
+                fitness_mode="penalized",
+                report_mode=report_mode,
+                init_strategy="mixed",
+                init_constructive_ratio=init_ratio,
+                selection=SELECTION,
+                tournament_k=TOURNAMENT_K,
+                elitism=ELITISM,
+                p_crossover=pcross,
+                p_mut_move=pmove,
+                ratio_to_remove=rtr,
+                p_mut_resupport=pres,
+                p_mut_rot=P_ROT,
+                p_mut_presence=P_PRES,
+                mutation_strength=MUT_STRENGTH,
+                prob_presence_init=PRESENCE_INIT,
+            )
+        )
 
     return cfgs
 
@@ -217,6 +213,7 @@ def benchmark_basic(
     mode: str = "strict",
     seeds: List[int] = [0, 1, 2],
     save_baseline: bool = True,
+    tuning: bool = False,
 ) -> None:
     """
     Runs only Phase A (wide operator grid) and saves:
@@ -236,17 +233,59 @@ def benchmark_basic(
     # Baseline: random search (optional)
     if save_baseline:
         for s in seeds:
-            summary_rows.append(run_one_random(
-                boxes=boxes,
-                warehouse=warehouse,
-                seed=s,
-                trials=100,
-                presence=0.7,
-                report_mode=mode,
-            ))
+            summary_rows.append(
+                run_one_random(
+                    boxes=boxes,
+                    warehouse=warehouse,
+                    seed=s,
+                    trials=100,
+                    presence=0.7,
+                    report_mode=mode,
+                )
+            )
 
     # GA grid (Phase A)
-    cfgs = make_grid_A(report_mode=mode)
+    if tuning:
+        cfgs = make_grid_A(report_mode=mode)
+    else:
+        cfgs = [
+            GAConfig(
+                pop_size=300,
+                generations=300,
+                fitness_mode="penalized",
+                report_mode=mode,
+                p_mut_resupport=0.00,
+                p_mut_move=0.20,
+                p_crossover=0.7,
+                init_strategy="constructive",
+                init_constructive_ratio=1.0,
+                ratio_to_remove=0.1,
+            ),
+            GAConfig(
+                pop_size=300,
+                generations=300,
+                fitness_mode="penalized",
+                report_mode=mode,
+                p_mut_resupport=0.00,
+                p_mut_move=0.10,
+                p_crossover=0.7,
+                init_strategy="constructive",
+                init_constructive_ratio=1,
+                ratio_to_remove=0.1,
+            ),
+            GAConfig(
+                pop_size=300,
+                generations=300,
+                fitness_mode="penalized",
+                report_mode=mode,
+                p_mut_resupport=0.0,
+                p_mut_move=0.35,
+                p_crossover=0.7,
+                init_strategy="constructive",
+                init_constructive_ratio=1,
+                ratio_to_remove=0.35,
+            ),
+        ]
 
     for i, cfg in enumerate(cfgs):
         run_id = (
@@ -266,7 +305,7 @@ def benchmark_basic(
                 patience=60,
                 log_every=5,
                 run_id=run_id,
-                conv_subdir="A",
+                conv_subdir={"A" if tuning else "baseline"},
             )
             summary_rows.append(row)
 
@@ -278,9 +317,11 @@ def benchmark_basic(
         r["boxes_csv"] = boxes_csv
 
     write_csv("runs/summary.csv", summary_rows)
-    write_csv("runs/summary_A.csv", summary_rows)
+    if tuning:
+        write_csv("runs/summary_A.csv", summary_rows)
 
     print("Saved:")
     print(" - runs/summary.csv")
-    print(" - runs/summary_A.csv")
-    print(" - runs/convergence/A/*.csv")
+    if tuning:
+        print(" - runs/summary_A.csv")
+    print(f" - runs/convergence/{'A' if tuning else 'baseline'}/*.csv")
