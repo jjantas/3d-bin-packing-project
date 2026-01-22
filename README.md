@@ -36,7 +36,7 @@ Uruchamia porównanie Algorytmu Genetycznego z losowym układaniem. Wyniki zapis
     python main.py --benchmark
 
 **2. Tryb strojenia (`--tuning`)**
-Uruchamia tzw. **Grid Search**. Program sprawdzi setki kombinacji parametrów (może to zająć dużo czasu).
+Uruchamia tzw. **Grid Search**. Program sprawdzi setki kombinacji parametrów (może to zająć dużo czasu). Utworzy szczegółowe pliki z wynikami w `runs/convergence/A`. A na końcu ze względu na to że uznajemy to jako pierwszą fazę strojenia, podsumowanie trafi do `phased/summary_A.csv`.
 
     python main.py --benchmark --tuning
 
@@ -52,7 +52,7 @@ python main.py --benchmark --tuning=True --warehouse 35 35 35 --boxes_csv data/b
 python plot_results.py --mode hyperparams --conv_glob "runs/convergence/A/*.csv" --metric best_report
 ```
 ### Co się wydarzy?
-Program przeanalizuje pliki z folderu `runs/` i utworzy nowy folder `runs/plots/` zawierający:
+Program przeanalizuje pliki z folderu `runs/` i utworzy nowy folder `runs/plots_A/` zawierający:
 
 1.  **Porównanie (Summary):** Wykresy kropkowe pokazujące, o ile lepiej algorytm genetyczny radzi sobie od losowego (`summary_scatter_fitness.png`).
 2.  **Ranking:** Wykres słupkowy pokazujący, które ustawienia (konfiguracje) były najlepsze (`ga_configs_ranking.png`).
@@ -84,3 +84,6 @@ Możesz sterować działaniem programu, dodając te opcje przy uruchamianiu:
 * **`fitness.py`** – "Sędzia" (ocena ułożenia paczek).
 * **`experiments.py`** – Logika układania (fizyka pakowania).
 * **`viz.py`** – Wizualizacja 3D (dla pojedynczych rozwiązań).
+* **`data/`** – Przykładowe pliki CSV z listami paczek.
+* **`runs/`** – Folder, gdzie zapisywane są wyniki benchmarków i wykresy.
+
