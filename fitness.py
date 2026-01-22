@@ -1,4 +1,3 @@
-# src/binpack3d/fitness.py
 from __future__ import annotations
 from typing import Literal
 from models import Solution, Container
@@ -20,8 +19,7 @@ def _is_supported(c: Container, accepted: list[Container]) -> bool:
 
 
 def _out_of_bounds_penalty(c: Container) -> int:
-    # kara za przekroczenia w osiach (w jednostkach długości)
-    # (proste i szybkie; nie wymaga liczenia "volume outside")
+
     Wx, Wy, Wz = c.Wx, c.Wy, c.Wz
     if None in (Wx, Wy, Wz, c.x, c.y, c.z, c.dx, c.dy, c.dz):
         return 0
@@ -61,32 +59,26 @@ def fitness(solution: Solution, mode: FitnessMode = "strict") -> int:
             total += container_volume(c)
         return total
 
-    # ---- penalized ----
-    # baza: "ile chcę zapakować" (nawet jeśli nielegalne)
     base = sum(container_volume(c) for c in solution.containers if c.inserted)
 
-    # kary: w tej instancji objętości są rzędu ~2000,
-    # więc kary muszą być porównywalne / większe.
-    P_OUT = 20000  # za jednostkę przekroczenia
-    P_OVER = 10000  # za każdą kolizję pary
-    P_FLOAT = 2000  # za każdy "wiszący" kontener
+
+    P_OUT = 20000  
+    P_OVER = 10000 
+    P_FLOAT = 2000 
 
     penalty = 0
 
     inserted = [c for c in solution.containers if c.inserted]
 
-    # (1) out of bounds
     for c in inserted:
         if not c.fits_in_magazine():
             penalty += P_OUT * _out_of_bounds_penalty(c)
 
-    # (2) overlaps (para)
     for i in range(len(inserted)):
         for j in range(i + 1, len(inserted)):
             if not inserted[i].doesnt_overlap(inserted[j]):
                 penalty += P_OVER
 
-    # (3) floating (brak podparcia)
     for c in inserted:
         if c.z == 0:
             continue

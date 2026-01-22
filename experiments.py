@@ -1,4 +1,3 @@
-# src/binpack3d/experiments.py
 from __future__ import annotations
 import random
 from typing import List, Dict, Any, Literal
@@ -43,9 +42,8 @@ def _try_place_on_floor(
 
     Wx, Wy, Wz = c.Wx, c.Wy, c.Wz
     if c.dz > Wz:
-        return False  # i tak nie zmieści się w pionie
+        return False  
 
-    # losujemy x,y w [0, W-d] (jeśli możliwe)
     x_hi = max(0, Wx - c.dx)
     y_hi = max(0, Wy - c.dy)
 
@@ -79,20 +77,17 @@ def _try_place_on_supporters(
     if not supporters:
         return False
 
-    # wielokrotnie próbujemy: losowy supporter -> losowe x,y dające overlap_xy -> test kolizji
     for _ in range(trials):
         supporter = random.choice(supporters)
         z = supporter.z + supporter.dz
         if z + c.dz > Wz:
-            continue  # za wysoko
+            continue  
 
-        # zakres x,y dający dodatni overlap w XY
         x_lo = supporter.x - c.dx + 1
         x_hi = supporter.x + supporter.dx - 1
         y_lo = supporter.y - c.dy + 1
         y_hi = supporter.y + supporter.dy - 1
 
-        # klamruj do [0, W-d]
         x_lo = max(x_lo, 0)
         y_lo = max(y_lo, 0)
         x_hi = min(x_hi, max(0, Wx - c.dx))
@@ -105,11 +100,9 @@ def _try_place_on_supporters(
         c.y = _rand_int_clamped(y_lo, y_hi)
         c.z = z
 
-        # (1) musi być podparty
         if not c.overlaps_xy(supporter):
             continue
 
-        # (2) i nie może nachodzić na pozostałe
         if _fits_no_overlap(c, placed):
             return True
 
@@ -136,11 +129,9 @@ def _place_supported_floor_first(
     ):
         return
 
-    # fallback — cokolwiek, żeby nie było None
     c.place_randomly(bias_inside=bias_inside)
     if bias_inside:
-        c.z = 0  # preferuj podłogę w fallback
-
+        c.z = 0  
 
 def random_solution(
     boxes: List[Dims],
@@ -156,13 +147,10 @@ def random_solution(
         c.choose_presence_randomly(prob_presence)
         c.choose_rotation_randomly()
 
-        # zawsze ustaw coś sensownego w polach x,y,z
         if init == "pure_random":
-            # "stara" losowość: pełne losowanie pozycji
             c.place_randomly(bias_inside=bias_inside)
 
         else:
-            # constructive: floor-first + supporters + no-overlap
             if not c.inserted:
                 c.place_randomly(bias_inside=bias_inside)
             else:
@@ -186,7 +174,6 @@ def random_search(
     best_f = -1
 
     for _ in range(trials):
-        # UWAGA: random_search zostawiamy "constructive" żeby baseline był mocny i stabilny
         sol = random_solution(
             boxes,
             warehouse,

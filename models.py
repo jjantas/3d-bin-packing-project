@@ -1,4 +1,3 @@
-# src/binpack3d/models.py
 from __future__ import annotations
 import random
 from dataclasses import dataclass
@@ -144,12 +143,10 @@ class Solution:
         return Solution([c.copy() for c in self.containers])
 
     def is_feasible(self) -> bool:
-        # 1) inside bin
         for c in self.containers:
             if c.inserted and (not c.fits_in_magazine()):
                 return False
 
-        # 2) no overlap among inserted
         for i in range(len(self.containers)):
             c1 = self.containers[i]
             if not c1.inserted:
@@ -159,7 +156,6 @@ class Solution:
                 if c2.inserted and (not c1.doesnt_overlap(c2)):
                     return False
 
-        # 3) no floating: każdy inserted musi być na podłodze (z==0) albo na innym kontenerze
         inserted = [c for c in self.containers if c.inserted]
         for c in inserted:
             if c.z == 0:

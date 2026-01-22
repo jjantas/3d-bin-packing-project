@@ -1,4 +1,3 @@
-# src/binpack3d/benchmark.py
 from __future__ import annotations
 
 import os
@@ -14,10 +13,6 @@ from io_utils import load_boxes_from_csv
 from experiments import random_search
 from ga import GAConfig, run_ga
 
-
-# -------------------------
-# Helpers
-# -------------------------
 def warehouse_volume(warehouse: Tuple[int, int, int]) -> int:
     Wx, Wy, Wz = warehouse
     return Wx * Wy * Wz
@@ -45,9 +40,6 @@ def cfg_fingerprint(cfg_dict: Dict[str, Any]) -> str:
     return hashlib.md5(s.encode("utf-8")).hexdigest()[:8]
 
 
-# -------------------------
-# One-run wrappers
-# -------------------------
 def run_one_random(
     boxes,
     warehouse,
@@ -109,7 +101,6 @@ def run_one_ga(
     cfg_dict = asdict(cfg)
     cfg_id = cfg_fingerprint(cfg_dict)
 
-    # --- convergence save
     conv_dir = os.path.join("runs", "convergence", conv_subdir)
     ensure_dir(conv_dir)
     conv_path = os.path.join(conv_dir, f"ga_{run_id}_{cfg_id}_seed{seed}.csv")
@@ -129,7 +120,6 @@ def run_one_ga(
         hist.append(out)
     write_csv(conv_path, hist)
 
-    # --- summary row
     return {
         "algo": "ga",
         "run_id": run_id,
@@ -147,22 +137,17 @@ def run_one_ga(
     }
 
 
-# -------------------------
-# Phase A grid (operators)
-# -------------------------
+
 def make_grid_A(report_mode: str) -> List[GAConfig]:
-    # Operator grid (tuning)
     ratio_to_remove_grid = [0.10, 0.20, 0.35, 0.50]  # 4
     pmove_grid = [0.10, 0.20, 0.35]  # 3
     presupport_grid = [0.0, 0.20, 0.40]  # 3
     init_ratio_grid = [0.2, 1.0]  # 2
     pcross_grid = [0.7, 0.9]  # 2
 
-    # Fixed budget for Phase A
     POP_SIZE = 300
     GENERATIONS = 300
 
-    # Fixed "reasonable defaults"
     SELECTION = "tournament"
     TOURNAMENT_K = 5
     ELITISM = 2
@@ -204,9 +189,6 @@ def make_grid_A(report_mode: str) -> List[GAConfig]:
     return cfgs
 
 
-# -------------------------
-# Main benchmark (Phase A only)
-# -------------------------
 def benchmark_basic(
     boxes_csv: str,
     warehouse: Tuple[int, int, int],
@@ -230,7 +212,6 @@ def benchmark_basic(
 
     summary_rows: List[Dict[str, Any]] = []
 
-    # Baseline: random search (optional)
     if save_baseline:
         for s in seeds:
             summary_rows.append(
@@ -244,7 +225,6 @@ def benchmark_basic(
                 )
             )
 
-    # GA grid (Phase A)
     if tuning:
         cfgs = make_grid_A(report_mode=mode)
     else:
@@ -309,7 +289,6 @@ def benchmark_basic(
             )
             summary_rows.append(row)
 
-    # Add instance metadata (useful for analysis)
     for r in summary_rows:
         r["warehouse"] = str(warehouse)
         r["warehouse_volume"] = warehouse_volume(warehouse)

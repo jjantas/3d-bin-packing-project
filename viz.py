@@ -1,4 +1,3 @@
-# src/binpack3d/viz.py
 from __future__ import annotations
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -8,7 +7,6 @@ import os
 
 
 def _cuboid_faces(x, y, z, dx, dy, dz):
-    # 8 vertices
     v = [
         (x, y, z),
         (x + dx, y, z),
@@ -19,7 +17,6 @@ def _cuboid_faces(x, y, z, dx, dy, dz):
         (x + dx, y + dy, z + dz),
         (x, y + dy, z + dz),
     ]
-    # 6 faces
     return [
         [v[0], v[1], v[2], v[3]],
         [v[4], v[5], v[6], v[7]],
@@ -43,7 +40,6 @@ def plot_solution(sol: Solution, warehouse: Dims, title: str = "") -> None:
     if title:
         ax.set_title(title)
 
-    # draw boxes
     for c in sol.containers:
         if not c.inserted:
             continue

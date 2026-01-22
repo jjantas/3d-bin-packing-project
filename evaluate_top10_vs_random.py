@@ -12,9 +12,6 @@ from experiments import random_search
 from ga import GAConfig, run_ga
 
 
-# -------------------------
-# Helpers
-# -------------------------
 def ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
@@ -44,7 +41,6 @@ def pick_top_cfgs(summary_csv: str, top_n: int = 10) -> pd.DataFrame:
     """
     df = pd.read_csv(summary_csv)
 
-    # tylko GA
     df = df[df["algo"].astype(str) == "ga"].copy()
 
     if "score_from_conv" not in df.columns:
@@ -53,7 +49,6 @@ def pick_top_cfgs(summary_csv: str, top_n: int = 10) -> pd.DataFrame:
     df["score_from_conv"] = pd.to_numeric(df["score_from_conv"], errors="coerce")
     df = df.dropna(subset=["score_from_conv"])
 
-    # ranking po cfg_id: mean po seedach
     rank = (
         df.groupby("cfg_id")["score_from_conv"]
         .agg(["mean", "count", "std", "max"])
@@ -63,7 +58,6 @@ def pick_top_cfgs(summary_csv: str, top_n: int = 10) -> pd.DataFrame:
 
     top = rank.head(top_n).copy()
 
-    # dołącz parametry z pierwszego wystąpienia cfg_id
     params_cols = [
         "elitism",
         "fitness_mode",
@@ -92,7 +86,6 @@ def pick_top_cfgs(summary_csv: str, top_n: int = 10) -> pd.DataFrame:
         how="left",
     )
 
-    # porządek
     top = top.rename(columns={"mean": "rank_score_mean", "count": "n_seeds"})
     return top
 
@@ -118,15 +111,12 @@ def cfg_from_row(row: pd.Series) -> GAConfig:
         p_mut_resupport=to_float(row.get("p_mut_resupport", 0.20), 0.20),
         mutation_strength=to_float(row.get("mutation_strength", 0.15), 0.15),
         ratio_to_remove=to_float(row.get("ratio_to_remove", 0.20), 0.20),
-        # GA selekcjonuje po fitness_mode, raportuje report_mode
         fitness_mode=str(row.get("fitness_mode", "penalized")),
         report_mode=str(row.get("report_mode", "strict")),
     )
 
 
-# -------------------------
-# Main evaluation
-# -------------------------
+
 def main():
     ap = argparse.ArgumentParser(
         description="Evaluate TOP-10 GA configs vs random_search on 3 warehouse sizes."
@@ -199,16 +189,13 @@ def main():
         ("hard", parse_wh(args.hard_wh)),
     ]
 
-    # load boxes once
     boxes, _wh_from_csv = load_boxes_from_csv(args.boxes_csv)
 
-    # pick top configs from summary
     top_cfgs = pick_top_cfgs(args.summary_csv, top_n=args.top_n)
 
     out_dir = os.path.dirname(args.out_csv)
     ensure_dir(out_dir)
 
-    # save ranking for reference
     top_cfgs.to_csv(os.path.join(out_dir, "top_cfgs.csv"), index=False)
 
     rows: List[Dict[str, Any]] = []
@@ -220,7 +207,6 @@ def main():
 
         for wh_name, wh in warehouses:
             for seed in seeds:
-                # ---------- GA ----------
                 t0 = time.perf_counter()
                 ga_res = run_ga(
                     boxes=boxes,
@@ -237,7 +223,6 @@ def main():
                     ga_score / warehouse_volume(wh) if warehouse_volume(wh) > 0 else 0.0
                 )
 
-                # ---------- Random Search ----------
                 t2 = time.perf_counter()
                 rs_res = random_search(
                     boxes=boxes,
@@ -245,7 +230,7 @@ def main():
                     trials=args.rs_trials,
                     prob_presence=args.rs_presence,
                     seed=seed,
-                    fitness_mode=cfg.report_mode,  # porównanie w tym samym trybie raportowania
+                    fitness_mode=cfg.report_mode,  
                 )
                 t3 = time.perf_counter()
 
@@ -271,7 +256,6 @@ def main():
                         "rs_utilization": rs_util,
                         "rs_seconds": (t3 - t2),
                         "ga_minus_rs": ga_score - rs_score,
-                        # meta (z rankingu)
                         "rank_score_mean": to_float(
                             cfg_row.get("rank_score_mean", 0.0)
                         ),
@@ -280,13 +264,10 @@ def main():
                     }
                 )
 
-                # zapis przyrostowy
                 pd.DataFrame(rows).to_csv(args.out_csv, index=False)
 
-    # final save
     pd.DataFrame(rows).to_csv(args.out_csv, index=False)
 
-    # dodatkowy agregat: mean po seedach
     df_res = pd.DataFrame(rows)
     agg = (
         df_res.groupby(["rank", "cfg_id", "warehouse_case"])

@@ -1,4 +1,3 @@
-# src/binpack3d/main.py
 from __future__ import annotations
 import argparse
 import csv
@@ -14,10 +13,8 @@ def parse_args():
 
     p.add_argument("--seed", type=int, default=123)
 
-    # report mode (to, co porównujesz z baseline)
     p.add_argument("--mode", type=str, default="strict", choices=["strict", "partial"])
 
-    # eval/selection mode (gradient dla GA)
     p.add_argument(
         "--ga_eval_mode",
         type=str,
@@ -109,7 +106,6 @@ def write_history_csv(path: str, history: list[dict], meta: dict):
 def main():
     args = parse_args()
 
-    # defaults
     warehouse = (35, 35, 35)
     boxes = [
         (6, 5, 4),
@@ -122,14 +118,12 @@ def main():
         (4, 7, 2),
     ]
 
-    # CSV override
     if args.boxes_csv is not None:
         boxes_loaded, wh_loaded = load_boxes_from_csv(args.boxes_csv)
         boxes = boxes_loaded
         if wh_loaded is not None:
             warehouse = wh_loaded
 
-    # CLI warehouse override
     if args.warehouse is not None:
         warehouse = tuple(args.warehouse)
 
@@ -137,7 +131,7 @@ def main():
         benchmark_basic(
             boxes_csv=args.boxes_csv if args.boxes_csv else "data/boxes.csv",
             warehouse=warehouse,
-            mode=args.mode,  # report_mode w benchmarku
+            mode=args.mode,  
             seeds=[0, 1, 2],
             tuning=args.tuning,
         )
@@ -159,8 +153,8 @@ def main():
         p_mut_resupport=args.presupport,
         mutation_strength=args.strength,
         ratio_to_remove=args.ratio_to_remove,
-        fitness_mode=args.ga_eval_mode,  # ✅ selekcja/gradient
-        report_mode=args.mode,  # ✅ porównywalne wyniki
+        fitness_mode=args.ga_eval_mode,  
+        report_mode=args.mode,  
     )
 
     result = run_ga(

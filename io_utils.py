@@ -1,4 +1,3 @@
-# src/binpack3d/io_utils.py
 from __future__ import annotations
 from typing import List, Tuple, Optional
 import csv
@@ -32,7 +31,6 @@ def load_boxes_from_csv(path: str) -> Tuple[List[Dims], Optional[Dims]]:
     if not rows:
         raise ValueError(f"CSV is empty: {path}")
 
-    # wykryj czy pierwszy wiersz to nagłówek
     header = [c.strip() for c in rows[0]]
     header_lower = [c.lower() for c in header]
     has_header = any(
@@ -73,7 +71,6 @@ def load_boxes_from_csv(path: str) -> Tuple[List[Dims], Optional[Dims]]:
                 warehouse = (Wx, Wy, Wz)
 
     else:
-        # brak nagłówka: zakładamy 3 pierwsze kolumny to l,w,h
         for row in rows:
             if len(row) < 3:
                 continue

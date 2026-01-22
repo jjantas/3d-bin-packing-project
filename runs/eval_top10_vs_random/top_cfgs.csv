@@ -1,0 +1,11 @@
+cfg_id,rank_score_mean,n_seeds,std,max,elitism,fitness_mode,generations,init_constructive_ratio,init_strategy,mutation_strength,p_crossover,p_mut_move,p_mut_presence,p_mut_resupport,p_mut_rot,pop_size,prob_presence_init,ratio_to_remove,report_mode,selection,threshold_keep_ratio,tournament_k
+0f093ffa,29110.0,3,523.9398820475494,29454.0,2,penalized,300,1.0,mixed,0.15,0.7,0.2,0.05,0.0,0.1,300,0.7,0.1,strict,tournament,0.25,5
+9de0dfab,28989.0,3,473.728825384312,29454.0,2,penalized,300,1.0,mixed,0.15,0.7,0.35,0.05,0.0,0.1,300,0.7,0.35,strict,tournament,0.25,5
+53886113,28846.333333333332,3,294.0413803078285,29026.0,2,penalized,300,1.0,mixed,0.15,0.7,0.2,0.05,0.0,0.1,300,0.7,0.5,strict,tournament,0.25,5
+c491eb65,28811.333333333332,3,676.3477902184147,29369.0,2,penalized,300,1.0,mixed,0.15,0.9,0.1,0.05,0.0,0.1,300,0.7,0.35,strict,tournament,0.25,5
+303e75bc,28738.333333333332,3,656.9096843047249,29369.0,2,penalized,300,1.0,mixed,0.15,0.7,0.1,0.05,0.0,0.1,300,0.7,0.2,strict,tournament,0.25,5
+c8ca4b93,28717.666666666668,3,655.0307880804794,29369.0,2,penalized,300,1.0,mixed,0.15,0.7,0.2,0.05,0.0,0.1,300,0.7,0.35,strict,tournament,0.25,5
+5efe19be,28717.666666666668,3,856.3015434607918,29454.0,2,penalized,300,1.0,mixed,0.15,0.9,0.35,0.05,0.0,0.1,300,0.7,0.2,strict,tournament,0.25,5
+2fc14040,28717.666666666668,3,1202.5058558415983,29454.0,2,penalized,300,1.0,mixed,0.15,0.7,0.1,0.05,0.0,0.1,300,0.7,0.1,strict,tournament,0.25,5
+72a98dfd,28683.333333333332,3,952.8936631824835,29433.0,2,penalized,300,1.0,mixed,0.15,0.7,0.35,0.05,0.0,0.1,300,0.7,0.1,strict,tournament,0.25,5
+d2595fe1,28675.666666666668,3,589.5594400341105,29026.0,2,penalized,300,1.0,mixed,0.15,0.9,0.1,0.05,0.0,0.1,300,0.7,0.1,strict,tournament,0.25,5

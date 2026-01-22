@@ -1,4 +1,3 @@
-# src/binpack3d/ga.py
 from __future__ import annotations
 import random
 from dataclasses import dataclass
@@ -11,7 +10,6 @@ from fitness import fitness, FitnessMode
 SelectionMode = Literal["threshold", "tournament"]
 GAInitMode = Literal["constructive", "random", "mixed"]
 
-# raportujemy tylko "prawdziwy" wynik: strict albo partial
 ReportMode = Literal["strict", "partial"]
 
 
@@ -35,19 +33,14 @@ class GAConfig:
     p_mut_rot: float = 0.10
     p_mut_presence: float = 0.05
 
-    # dodatkowa "naprawcza" mutacja wsparcia / repozycjonowania (po bulk repack)
     p_mut_resupport: float = 0.20
 
     mutation_strength: float = 0.15
 
-    ratio_to_remove: float = (
-        0.20  # ratio of placed boxes to remove during "ruin and recreate"
-    )
+    ratio_to_remove: float = 0.2
 
-    # KLUCZ: na czym GA selekcjonuje (gradient)
     fitness_mode: FitnessMode = "penalized"
 
-    # KLUCZ: co raportujemy jako "best_fitness" (porównywalne z baseline)
     report_mode: ReportMode = "strict"
 
 
@@ -94,20 +87,17 @@ def try_insert_box(c: Container, obstacles: list[Container]) -> bool:
     c.inserted = True
     _place_supported_floor_first(c, obstacles, bias_inside=True)
 
-    # 1) musi mieć współrzędne i mieścić się
     if None in (c.x, c.y, c.z) or (not c.fits_in_magazine()):
         c.inserted = False
         c.x, c.y, c.z = None, None, None
         return False
 
-    # 2) nie może nachodzić na przeszkody
     for o in obstacles:
         if o.inserted and (not c.doesnt_overlap(o)):
             c.inserted = False
             c.x, c.y, c.z = None, None, None
             return False
 
-    # 3) podparcie: jak z>0, musi overlap_xy z kimś kto ma top==z
     if c.z > 0:
         supported = any(
             (o.z + o.dz) == c.z and c.overlaps_xy(o) for o in obstacles if o.inserted
@@ -132,14 +122,12 @@ def _resupport_pass(sol: Solution, cfg: GAConfig) -> None:
     if len(inserted) <= 1:
         return
 
-    # iterujemy w losowej kolejności, żeby nie faworyzować indeksów
     random.shuffle(inserted)
 
     for c in inserted:
         if random.random() > cfg.p_mut_resupport:
             continue
 
-        # wyjmij na chwilę
         c.inserted = False
         c.x, c.y, c.z = None, None, None
 
@@ -147,7 +135,6 @@ def _resupport_pass(sol: Solution, cfg: GAConfig) -> None:
         ok = try_insert_box(c, obstacles)
 
         if not ok:
-            # jeśli nie da się włożyć poprawnie, zostawiamy wyjęte (to też jest sensowna mutacja)
             pass
 
 
@@ -157,7 +144,6 @@ def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
     + opcjonalny resupport-pass.
     """
 
-    # 1) Drobne mutacje rotacji i obecności dla boxów NIEwłożonych
     for c in sol.containers:
         if not c.inserted and random.random() < cfg.p_mut_rot:
             c.choose_rotation_randomly()
@@ -166,7 +152,6 @@ def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
             obstacles = [x for x in sol.containers if x.inserted]
             try_insert_box(c, obstacles)
 
-    # 2) GŁÓWNA MUTACJA: Bulk Repack (Przepakowanie grupowe)
     if random.random() < cfg.p_mut_move:
         placed = [c for c in sol.containers if c.inserted]
         if not placed:
@@ -193,7 +178,6 @@ def mutate_solution(sol: Solution, cfg: GAConfig) -> None:
             if ok:
                 obstacles.append(c)
 
-    # 3) Opcjonalny resupport pass (naprawczy / eksploracyjny)
     _resupport_pass(sol, cfg)
 
 
@@ -218,13 +202,11 @@ def run_ga(
         for _ in range(cfg.pop_size)
     ]
 
-    # najlepszy wg fitness_mode (do prowadzenia selekcji)
     best_eval: Solution | None = None
     best_eval_score = -1
     best_eval_gen = 0
     no_improve = 0
 
-    # najlepszy wg report_mode (do raportu / porównania z baseline)
     best_report: Solution | None = None
     best_report_score = -1
     best_report_gen = 0
@@ -262,11 +244,9 @@ def run_ga(
             history.append(
                 {
                     "gen": gen,
-                    # fitness_mode (gradient)
                     "best_eval": best_eval_score,
                     "gen_best_eval": gen_best_eval,
                     "avg_eval": avg_eval,
-                    # report_mode (real quality)
                     "best_report": best_report_score,
                     "gen_best_report": gen_best_report,
                     "avg_report": avg_report,
