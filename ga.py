@@ -192,7 +192,7 @@ def run_ga(
     warehouse: Dims,
     cfg: GAConfig,
     seed: int,
-    patience: int = 60,
+    patience: int = 100,
     log_every: int = 10,
 ) -> Dict[str, Any]:
     random.seed(seed)

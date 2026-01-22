@@ -1,271 +1,446 @@
-# src/binpack3d/plot_results.py
-from __future__ import annotations
-import argparse
-import csv
+import pandas as pd
 import glob
-import os
-from collections import defaultdict
-from typing import Dict, Any, List, Tuple
-
 import matplotlib.pyplot as plt
+import os
+import argparse
+
+# ================= CONFIG =================
+FILES_GLOB = "runs/convergence/A/*.csv"
+# =========================================
 
 
 def ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
 
-def read_csv(path: str) -> List[Dict[str, Any]]:
-    with open(path, "r", newline="", encoding="utf-8") as f:
-        r = csv.DictReader(f)
-        return [dict(row) for row in r]
-
-
-def to_float(x: Any, default: float = 0.0) -> float:
-    if x is None:
+def safe_get(row: dict, key: str, default="-"):
+    if key not in row:
         return default
-    s = str(x).strip()
-    if s == "":
+    v = row.get(key)
+    if pd.isna(v):
         return default
-    try:
-        return float(s)
-    except ValueError:
-        return default
+    return v
 
 
-def to_int(x: Any, default: int = 0) -> int:
-    if x is None:
-        return default
-    s = str(x).strip()
-    if s == "":
-        return default
-    try:
-        return int(float(s))
-    except ValueError:
-        return default
-
-
-def group_by(rows: List[Dict[str, Any]], key: str) -> Dict[str, List[Dict[str, Any]]]:
-    out: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-    for row in rows:
-        out[str(row.get(key, ""))].append(row)
-    return out
-
-
-def plot_summary_scatter(summary_rows: List[Dict[str, Any]], out_dir: str) -> None:
+def label_from_row(row: dict) -> str:
     """
-    Wykresy porównawcze GA vs random:
-    - best_fitness vs seed (scatter)
-    - utilization vs seed (scatter)
-    - seconds vs seed (scatter)
+    Build a compact legend label from GA hyperparameters stored in the CSV row.
     """
-    ensure_dir(out_dir)
+    rtr = safe_get(row, "ratio_to_remove", "-")
+    pm = safe_get(row, "p_mut_move", "-")
+    prs = safe_get(row, "p_mut_resupport", "-")
+    initr = safe_get(row, "init_constructive_ratio", "-")
+    pc = safe_get(row, "p_crossover", "-")
+    gen_total = safe_get(row, "generations", "-")
 
-    # przygotuj dane
-    for r in summary_rows:
-        r["best_fitness"] = to_float(r.get("best_fitness", 0))
-        r["utilization"] = to_float(r.get("utilization", 0))
-        r["seconds"] = to_float(r.get("seconds", 0))
-        r["seed"] = to_int(r.get("seed", 0))
+    def fmt(x):
+        try:
+            xf = float(x)
+            if abs(xf - round(xf)) < 1e-9:
+                return str(int(round(xf)))
+            return f"{xf:.2f}"
+        except Exception:
+            return str(x)
 
-    by_algo = group_by(summary_rows, "algo")
+    parts = [
+        f"rtr:{fmt(rtr)}",
+        f"pm:{fmt(pm)}",
+        f"prs:{fmt(prs)}",
+        f"init:{fmt(initr)}",
+        f"pc:{fmt(pc)}",
+    ]
 
-    # ---- best_fitness
-    plt.figure()
-    for algo, rows in by_algo.items():
-        xs = [r["seed"] for r in rows]
-        ys = [r["best_fitness"] for r in rows]
-        plt.scatter(xs, ys, label=algo)
-        if ys:
-            mean_y = sum(ys) / len(ys)
-            plt.axhline(mean_y, linestyle="--")
-    plt.xlabel("seed")
-    plt.ylabel("best_fitness")
-    plt.title("Best fitness: GA vs Random Search")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(os.path.join(out_dir, "summary_best_fitness.png"))
-    plt.close()
+    if gen_total != "-" and gen_total is not None:
+        parts.append(f"gen:{fmt(gen_total)}")
 
-    # ---- utilization
-    plt.figure()
-    for algo, rows in by_algo.items():
-        xs = [r["seed"] for r in rows]
-        ys = [r["utilization"] for r in rows]
-        plt.scatter(xs, ys, label=algo)
-        if ys:
-            mean_y = sum(ys) / len(ys)
-            plt.axhline(mean_y, linestyle="--")
-    plt.xlabel("seed")
-    plt.ylabel("utilization (packed_volume / warehouse_volume)")
-    plt.title("Utilization: GA vs Random Search")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(os.path.join(out_dir, "summary_utilization.png"))
-    plt.close()
-
-    # ---- seconds
-    plt.figure()
-    for algo, rows in by_algo.items():
-        xs = [r["seed"] for r in rows]
-        ys = [r["seconds"] for r in rows]
-        plt.scatter(xs, ys, label=algo)
-        if ys:
-            mean_y = sum(ys) / len(ys)
-            plt.axhline(mean_y, linestyle="--")
-    plt.xlabel("seed")
-    plt.ylabel("seconds")
-    plt.title("Runtime: GA vs Random Search")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(os.path.join(out_dir, "summary_seconds.png"))
-    plt.close()
+    return " | ".join(parts)
 
 
-def plot_ga_configs_bar(summary_rows: List[Dict[str, Any]], out_dir: str) -> None:
+# -------------------------
+# Reading + preprocessing
+# -------------------------
+def load_data(metric_col: str):
+    files = glob.glob(FILES_GLOB)
+    if not files:
+        print("ERROR: No CSV files found.")
+        return None
+
+    print(f"Found {len(files)} files. Loading...")
+
+    frames = []
+    needed_cols = [
+        "gen", metric_col, "cfg_id", "seed",
+        "ratio_to_remove", "p_mut_move", "p_mut_resupport",
+        "init_constructive_ratio", "p_crossover", "generations",
+    ]
+
+    for fp in files:
+        df = pd.read_csv(fp)
+        if "gen" not in df.columns or metric_col not in df.columns:
+            continue
+
+        # fallback for older logs
+        if "cfg_id" not in df.columns and "run_id" in df.columns:
+            df["cfg_id"] = df["run_id"]
+
+        if "cfg_id" not in df.columns:
+            continue
+
+        for c in needed_cols:
+            if c not in df.columns:
+                df[c] = pd.NA
+
+        frames.append(df[needed_cols].copy())
+
+    if not frames:
+        print("ERROR: No valid data loaded.")
+        return None
+
+    df_all = pd.concat(frames, ignore_index=True)
+
+    df_all["gen"] = pd.to_numeric(df_all["gen"], errors="coerce").fillna(0).astype(int)
+    df_all[metric_col] = pd.to_numeric(df_all[metric_col], errors="coerce").fillna(0.0)
+    df_all["seed"] = pd.to_numeric(df_all["seed"], errors="coerce").fillna(0).astype(int)
+
+    # params as numeric (for grouping/pivot)
+    for p in ["ratio_to_remove", "p_mut_move", "p_mut_resupport", "init_constructive_ratio", "p_crossover"]:
+        df_all[p] = pd.to_numeric(df_all[p], errors="coerce")
+
+    return df_all
+
+
+# -------------------------
+# Scalar per (cfg_id, seed)
+# -------------------------
+def reduce_to_scalar_per_cfg_seed(df_all: pd.DataFrame, metric_col: str, score_mode: str):
     """
-    Dodatkowy wykres: porównanie konfiguracji GA (run_id) w uśrednieniu po seedach.
-    (Random search ignorujemy)
-    """
-    ensure_dir(out_dir)
+    Returns df_scalar with columns:
+      cfg_id, seed, score, ratio_to_remove, p_mut_move, p_mut_resupport, init_constructive_ratio, p_crossover
 
-    ga_rows = [r for r in summary_rows if str(r.get("algo", "")) == "ga"]
-    if not ga_rows:
+    score_mode:
+      - "max": max(metric) over generations
+      - "last": metric value at the last generation
+      - "mean": mean(metric) over generations (stability)
+    """
+    params = ["ratio_to_remove", "p_mut_move", "p_mut_resupport", "init_constructive_ratio", "p_crossover"]
+
+    if score_mode == "last":
+        idx = df_all.groupby(["cfg_id", "seed"])["gen"].idxmax()
+        df_scalar = df_all.loc[idx].copy()
+        df_scalar = df_scalar[["cfg_id", "seed", metric_col] + params].rename(columns={metric_col: "score"})
+    elif score_mode == "mean":
+        agg = {metric_col: "mean"}
+        for p in params:
+            agg[p] = "first"
+        df_scalar = df_all.groupby(["cfg_id", "seed"]).agg(agg).reset_index().rename(columns={metric_col: "score"})
+    else:
+        # "max"
+        agg = {metric_col: "max"}
+        for p in params:
+            agg[p] = "first"
+        df_scalar = df_all.groupby(["cfg_id", "seed"]).agg(agg).reset_index().rename(columns={metric_col: "score"})
+
+    df_scalar = df_scalar.dropna(subset=params, how="any")
+    return df_scalar
+
+
+# -------------------------
+# TOP/BOTTOM convergence plots
+# -------------------------
+def rank_configs(df_all: pd.DataFrame, metric_col: str, rank_mode: str = "max"):
+    """
+    Returns a Series: index=cfg_id, value=score used for ranking.
+
+    rank_mode:
+      - "max": max(metric) over all generations
+      - "last": metric at the last generation
+      - "mean": mean(metric) over generations
+    """
+    if rank_mode == "last":
+        idx = df_all.groupby("cfg_id")["gen"].idxmax()
+        return df_all.loc[idx].set_index("cfg_id")[metric_col].sort_values(ascending=False)
+    if rank_mode == "mean":
+        return df_all.groupby("cfg_id")[metric_col].mean().sort_values(ascending=False)
+    return df_all.groupby("cfg_id")[metric_col].max().sort_values(ascending=False)
+
+
+def plot_convergence_lines(df_all, cfg_ids, metric_col, title, out_path, max_gen=80):
+    df_subset = df_all[df_all["cfg_id"].isin(cfg_ids)].copy()
+    if df_subset.empty:
+        print("No data after filtering - nothing to plot.")
         return
 
-    for r in ga_rows:
-        r["best_fitness"] = to_float(r.get("best_fitness", 0))
-        r["utilization"] = to_float(r.get("utilization", 0))
-        r["seconds"] = to_float(r.get("seconds", 0))
+    # average across seeds for each generation
+    df_agg = df_subset.groupby(["cfg_id", "gen"])[metric_col].mean().reset_index()
 
-    by_run = group_by(ga_rows, "run_id")
-    run_ids = sorted([k for k in by_run.keys() if k.strip() != ""])
+    if max_gen is not None:
+        df_agg = df_agg[df_agg["gen"] <= max_gen]
 
-    avg_fit = []
-    avg_util = []
-    avg_sec = []
+    plt.figure(figsize=(14, 8))
 
-    for rid in run_ids:
-        rows = by_run[rid]
-        avg_fit.append(sum(r["best_fitness"] for r in rows) / max(1, len(rows)))
-        avg_util.append(sum(r["utilization"] for r in rows) / max(1, len(rows)))
-        avg_sec.append(sum(r["seconds"] for r in rows) / max(1, len(rows)))
+    for cfg_id in cfg_ids:
+        line = df_agg[df_agg["cfg_id"] == cfg_id]
+        if line.empty:
+            continue
+        row0 = df_subset[df_subset["cfg_id"] == cfg_id].iloc[0].to_dict()
+        label = label_from_row(row0)
+        plt.plot(line["gen"], line[metric_col], label=label, linewidth=1.5)
 
-    # avg best_fitness per config
-    plt.figure()
-    plt.bar(run_ids, avg_fit)
-    plt.xlabel("GA config (run_id)")
-    plt.ylabel("avg best_fitness (over seeds)")
-    plt.title("GA configs: average best fitness")
+    plt.title(title)
+    plt.xlabel("Generation")
+    plt.ylabel(metric_col)
+
+    if max_gen is not None:
+        plt.xlim(0, max_gen)
+
+    plt.legend(loc="lower right", fontsize="small", title="GA hyperparameters")
+    plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(os.path.join(out_dir, "ga_configs_avg_best_fitness.png"))
+
+    ensure_dir(os.path.dirname(out_path) if os.path.dirname(out_path) else ".")
+    plt.savefig(out_path, dpi=300)
     plt.close()
-
-    # avg utilization per config
-    plt.figure()
-    plt.bar(run_ids, avg_util)
-    plt.xlabel("GA config (run_id)")
-    plt.ylabel("avg utilization (over seeds)")
-    plt.title("GA configs: average utilization")
-    plt.tight_layout()
-    plt.savefig(os.path.join(out_dir, "ga_configs_avg_utilization.png"))
-    plt.close()
-
-    # avg seconds per config
-    plt.figure()
-    plt.bar(run_ids, avg_sec)
-    plt.xlabel("GA config (run_id)")
-    plt.ylabel("avg seconds (over seeds)")
-    plt.title("GA configs: average runtime")
-    plt.tight_layout()
-    plt.savefig(os.path.join(out_dir, "ga_configs_avg_seconds.png"))
-    plt.close()
+    print(f"Saved: {out_path}")
 
 
-def read_convergence_files(pattern: str) -> List[Tuple[str, List[Dict[str, Any]]]]:
-    files = sorted(glob.glob(pattern))
-    out = []
-    for fp in files:
-        out.append((fp, read_csv(fp)))
-    return out
-
-
-def plot_convergence(convergence_rows: List[Dict[str, Any]], title: str, out_path: str) -> None:
+# -------------------------
+# Main effects (1D)
+# -------------------------
+def plot_main_effect(df_scalar: pd.DataFrame, param: str, out_path: str, title: str, y_label: str):
     """
-    Rysuje 3 osobne wykresy (osobne PNG) albo 1 wykres na 3 serie?
-    Zrobimy 2 PNG:
-      - best & avg
-      - feasible_rate
+    1D plot: effect of a single hyperparameter on score (mean/median + min/max band).
     """
-    # parse
-    data = []
-    for r in convergence_rows:
-        gen = to_int(r.get("gen", 0))
-        best = to_float(r.get("best", 0))
-        avg = to_float(r.get("avg", 0))
-        fr = to_float(r.get("feasible_rate", 0))
-        data.append((gen, best, avg, fr))
-    data.sort(key=lambda t: t[0])
+    g = df_scalar.groupby(param)["score"]
+    stats = g.agg(["mean", "median", "min", "max", "count"]).reset_index().sort_values(param)
 
-    gens = [t[0] for t in data]
-    bests = [t[1] for t in data]
-    avgs = [t[2] for t in data]
-    frs = [t[3] for t in data]
+    plt.figure(figsize=(10, 6))
+    plt.plot(stats[param], stats["mean"], label="mean", marker="o")
+    plt.plot(stats[param], stats["median"], label="median", marker="o")
+    plt.fill_between(stats[param], stats["min"], stats["max"], alpha=0.2, label="min..max")
 
-    base, ext = os.path.splitext(out_path)
-
-    # best & avg
-    plt.figure()
-    plt.plot(gens, bests, label="best")
-    plt.plot(gens, avgs, label="avg")
-    plt.xlabel("generation")
-    plt.ylabel("fitness")
-    plt.title(title + " (fitness)")
+    plt.title(title)
+    plt.xlabel(param)
+    plt.ylabel(y_label)
+    plt.grid(True, alpha=0.3)
     plt.legend()
     plt.tight_layout()
-    plt.savefig(base + "_fitness.png")
-    plt.close()
 
-    # feasible_rate
-    plt.figure()
-    plt.plot(gens, frs, label="feasible_rate")
-    plt.xlabel("generation")
-    plt.ylabel("feasible_rate")
-    plt.title(title + " (feasible rate)")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(base + "_feasible_rate.png")
+    ensure_dir(os.path.dirname(out_path) if os.path.dirname(out_path) else ".")
+    plt.savefig(out_path, dpi=300)
     plt.close()
+    print(f"Saved: {out_path}")
+
+
+# -------------------------
+# Heatmaps (2D)
+# -------------------------
+def plot_heatmap_mean(df_scalar: pd.DataFrame, x_param: str, y_param: str, out_path: str, title: str, cbar_label: str):
+    """
+    Heatmap of mean(score) for a pair of hyperparameters.
+    """
+    df_mean = df_scalar.groupby([x_param, y_param])["score"].mean().reset_index()
+    mat = df_mean.pivot(index=y_param, columns=x_param, values="score")
+    mat = mat.sort_index(axis=0).sort_index(axis=1)
+
+    plt.figure(figsize=(10, 7))
+    im = plt.imshow(mat.values, aspect="auto", origin="lower")
+    plt.title(title)
+    plt.xlabel(x_param)
+    plt.ylabel(y_param)
+
+    plt.xticks(range(len(mat.columns)), [f"{v:.2f}" for v in mat.columns])
+    plt.yticks(range(len(mat.index)), [f"{v:.2f}" for v in mat.index])
+
+    plt.colorbar(im, label=cbar_label)
+    plt.tight_layout()
+
+    ensure_dir(os.path.dirname(out_path) if os.path.dirname(out_path) else ".")
+    plt.savefig(out_path, dpi=300)
+    plt.close()
+    print(f"Saved: {out_path}")
+
+
+def plot_heatmap_slices(df_scalar: pd.DataFrame, x_param: str, y_param: str, slice_param: str, out_dir: str, base_title: str, cbar_label: str):
+    """
+    Small multiples: one heatmap per value of slice_param.
+    """
+    vals = sorted([v for v in df_scalar[slice_param].dropna().unique()])
+    for v in vals:
+        sub = df_scalar[df_scalar[slice_param] == v].copy()
+        if sub.empty:
+            continue
+        out_path = os.path.join(out_dir, f"HEATMAP_{y_param}_vs_{x_param}_slice_{slice_param}_{v:.2f}.png")
+        title = f"{base_title} | slice {slice_param}={v:.2f}"
+        plot_heatmap_mean(sub, x_param, y_param, out_path, title, cbar_label)
+
+
+# -------------------------
+# Main
+# -------------------------
+def run_analysis(metric_col, top_n, max_gen, out_dir, rank_mode, score_mode, do_heatmaps, do_main_effects, do_slices):
+    df_all = load_data(metric_col)
+    if df_all is None or df_all.empty:
+        return
+
+    ensure_dir(out_dir)
+
+    # TOP/BOTTOM convergence plots
+    ranking = rank_configs(df_all, metric_col, rank_mode)
+    top_cfgs = ranking.head(top_n).index.tolist()
+    worst_cfgs = ranking.tail(top_n).index.tolist()
+
+    plot_convergence_lines(
+        df_all, top_cfgs, metric_col,
+        f"TOP {top_n} configurations ({metric_col})",
+        os.path.join(out_dir, f"TOP_{top_n}_{metric_col}.png"),
+        max_gen
+    )
+
+    plot_convergence_lines(
+        df_all, worst_cfgs, metric_col,
+        f"BOTTOM {top_n} configurations ({metric_col})",
+        os.path.join(out_dir, f"BOTTOM_{top_n}_{metric_col}.png"),
+        max_gen
+    )
+
+    # Reduce to scalar per (cfg_id, seed) for parameter influence analysis
+    df_scalar = reduce_to_scalar_per_cfg_seed(df_all, metric_col, score_mode=score_mode)
+
+    # Better y labels for feasibility
+    if metric_col == "feasible_rate":
+        y_label = "feasible_rate (0..1)"
+        cbar_label = "mean(feasible_rate)"
+    else:
+        y_label = "score"
+        cbar_label = "mean(score)"
+
+    # Main effects (1D)
+    if do_main_effects:
+        params = [
+            "ratio_to_remove",
+            "p_mut_move",
+            "p_mut_resupport",
+            "init_constructive_ratio",
+            "p_crossover",
+        ]
+        for p in params:
+            plot_main_effect(
+                df_scalar,
+                param=p,
+                out_path=os.path.join(out_dir, f"MAIN_EFFECT_{metric_col}_{p}_{score_mode}.png"),
+                title=f"Main effect: {p} -> {metric_col} (score={score_mode})",
+                y_label=y_label
+            )
+
+    # Heatmaps (2D)
+    if do_heatmaps:
+        pairs = [
+            ("ratio_to_remove", "p_mut_move"),
+            ("ratio_to_remove", "p_mut_resupport"),
+            ("p_mut_move", "p_mut_resupport"),
+            ("ratio_to_remove", "init_constructive_ratio"),
+            ("p_mut_move", "init_constructive_ratio"),
+            ("ratio_to_remove", "p_crossover"),
+            ("p_mut_move", "p_crossover"),
+        ]
+        for x, y in pairs:
+            plot_heatmap_mean(
+                df_scalar,
+                x_param=x,
+                y_param=y,
+                out_path=os.path.join(out_dir, f"HEATMAP_{metric_col}_{y}_vs_{x}_{score_mode}.png"),
+                title=f"Heatmap: mean({metric_col}) by {y} x {x} (score={score_mode})",
+                cbar_label=cbar_label
+            )
+
+    # Slices (small multiples)
+    if do_slices:
+        base_dir = os.path.join(out_dir, "slices")
+        ensure_dir(base_dir)
+
+        plot_heatmap_slices(
+            df_scalar,
+            x_param="ratio_to_remove",
+            y_param="p_mut_move",
+            slice_param="p_mut_resupport",
+            out_dir=os.path.join(base_dir, "slice_presupport"),
+            base_title=f"Heatmap pmove x rtr ({metric_col}, score={score_mode})",
+            cbar_label=cbar_label
+        )
+        plot_heatmap_slices(
+            df_scalar,
+            x_param="ratio_to_remove",
+            y_param="p_mut_move",
+            slice_param="init_constructive_ratio",
+            out_dir=os.path.join(base_dir, "slice_init_ratio"),
+            base_title=f"Heatmap pmove x rtr ({metric_col}, score={score_mode})",
+            cbar_label=cbar_label
+        )
+        plot_heatmap_slices(
+            df_scalar,
+            x_param="ratio_to_remove",
+            y_param="p_mut_move",
+            slice_param="p_crossover",
+            out_dir=os.path.join(base_dir, "slice_pcross"),
+            base_title=f"Heatmap pmove x rtr ({metric_col}, score={score_mode})",
+            cbar_label=cbar_label
+        )
+
+    print(f"Done for metric={metric_col}.")
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--summary", type=str, default="runs/summary.csv")
-    ap.add_argument("--conv_glob", type=str, default="runs/convergence/*.csv")
-    ap.add_argument("--out_dir", type=str, default="runs/plots")
+    ap = argparse.ArgumentParser(description="GA convergence + hyperparameter influence plots (Phase A only)")
+    ap.add_argument("--metric", choices=["avg_report", "best_report", "feasible_rate"], default="avg_report",
+                    help="Which metric column from GA logs to analyze")
+    ap.add_argument("--top", type=int, default=10, help="How many configs to show for TOP/BOTTOM plots")
+    ap.add_argument("--max_gen", type=int, default=80,
+                    help="Cut convergence plots at this generation (e.g., 80). Use -1 to disable.")
+    ap.add_argument("--out_dir", type=str, default="runs/plots_A", help="Output directory for PNG files")
+
+    ap.add_argument("--rank_mode", choices=["max", "last", "mean"], default="max",
+                    help="Ranking method for TOP/BOTTOM: max/last/mean")
+    ap.add_argument("--score_mode", choices=["max", "last", "mean"], default="max",
+                    help="How to reduce each run to a scalar score for main-effects/heatmaps: max/last/mean")
+
+    ap.add_argument("--main_effects", action="store_true", help="Generate 1D main-effect plots for all hyperparameters")
+    ap.add_argument("--heatmaps", action="store_true", help="Generate 2D heatmaps for selected parameter pairs")
+    ap.add_argument("--slices", action="store_true", help="Generate sliced heatmaps (pmove x rtr) by other parameters")
+
+    ap.add_argument("--also_feasible", action="store_true",
+                    help="If set, runs a second analysis pass for feasible_rate (same flags).")
+
     args = ap.parse_args()
 
-    ensure_dir(args.out_dir)
+    max_gen = None if args.max_gen < 0 else args.max_gen
 
-    if os.path.exists(args.summary):
-        summary_rows = read_csv(args.summary)
-        plot_summary_scatter(summary_rows, args.out_dir)
-        plot_ga_configs_bar(summary_rows, args.out_dir)
-        print("Saved summary plots to:", args.out_dir)
-    else:
-        print("No summary.csv found at:", args.summary)
+    # primary metric
+    run_analysis(
+        metric_col=args.metric,
+        top_n=args.top,
+        max_gen=max_gen,
+        out_dir=args.out_dir,
+        rank_mode=args.rank_mode,
+        score_mode=args.score_mode,
+        do_heatmaps=args.heatmaps,
+        do_main_effects=args.main_effects,
+        do_slices=args.slices,
+    )
 
-    conv_files = read_convergence_files(args.conv_glob)
-    if not conv_files:
-        print("No convergence files found with glob:", args.conv_glob)
-        return
-
-    # grupuj po (run_id, seed) wg nazwy pliku albo kolumn
-    for fp, rows in conv_files:
-        # tytuł z nazwy pliku
-        name = os.path.basename(fp).replace(".csv", "")
-        plot_convergence(rows, title=name, out_path=os.path.join(args.out_dir, name + ".png"))
-
-    print("Saved convergence plots to:", args.out_dir)
+    # optional feasible_rate pass
+    if args.also_feasible and args.metric != "feasible_rate":
+        out2 = os.path.join(args.out_dir, "feasible_rate")
+        run_analysis(
+            metric_col="feasible_rate",
+            top_n=args.top,
+            max_gen=max_gen,
+            out_dir=out2,
+            rank_mode=args.rank_mode,
+            score_mode=args.score_mode,
+            do_heatmaps=args.heatmaps,
+            do_main_effects=args.main_effects,
+            do_slices=args.slices,
+        )
 
 
 if __name__ == "__main__":

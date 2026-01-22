@@ -1,5 +1,6 @@
 # src/binpack3d/benchmark.py
 from __future__ import annotations
+
 import os
 import csv
 import time
@@ -14,13 +15,17 @@ from experiments import random_search
 from ga import GAConfig, run_ga
 
 
+# -------------------------
+# Helpers
+# -------------------------
 def warehouse_volume(warehouse: Tuple[int, int, int]) -> int:
     Wx, Wy, Wz = warehouse
     return Wx * Wy * Wz
 
 
 def ensure_dir(path: str) -> None:
-    os.makedirs(path, exist_ok=True)
+    if path:
+        os.makedirs(path, exist_ok=True)
 
 
 def write_csv(path: str, rows: List[Dict[str, Any]]) -> None:
@@ -40,7 +45,17 @@ def cfg_fingerprint(cfg_dict: Dict[str, Any]) -> str:
     return hashlib.md5(s.encode("utf-8")).hexdigest()[:8]
 
 
-def run_one_random(boxes, warehouse, seed: int, trials: int, presence: float, mode: str) -> Dict[str, Any]:
+# -------------------------
+# One-run wrappers
+# -------------------------
+def run_one_random(
+    boxes,
+    warehouse,
+    seed: int,
+    trials: int,
+    presence: float,
+    report_mode: str,
+) -> Dict[str, Any]:
     t0 = time.perf_counter()
     res = random_search(
         boxes=boxes,
@@ -48,15 +63,17 @@ def run_one_random(boxes, warehouse, seed: int, trials: int, presence: float, mo
         trials=trials,
         prob_presence=presence,
         seed=seed,
-        fitness_mode=mode,
+        fitness_mode=report_mode,
     )
     t1 = time.perf_counter()
+
     best = res["best_fitness"]
     util = best / warehouse_volume(warehouse)
+
     return {
         "algo": "random_search",
         "seed": seed,
-        "report_mode": mode,
+        "report_mode": report_mode,
         "trials": trials,
         "presence_init": presence,
         "best_fitness": best,
@@ -65,7 +82,16 @@ def run_one_random(boxes, warehouse, seed: int, trials: int, presence: float, mo
     }
 
 
-def run_one_ga(boxes, warehouse, seed: int, cfg: GAConfig, patience: int, log_every: int, run_id: str) -> Dict[str, Any]:
+def run_one_ga(
+    boxes,
+    warehouse,
+    seed: int,
+    cfg: GAConfig,
+    patience: int,
+    log_every: int,
+    run_id: str,
+    conv_subdir: str = "A",
+) -> Dict[str, Any]:
     t0 = time.perf_counter()
     res = run_ga(
         boxes=boxes,
@@ -83,8 +109,8 @@ def run_one_ga(boxes, warehouse, seed: int, cfg: GAConfig, patience: int, log_ev
     cfg_dict = asdict(cfg)
     cfg_id = cfg_fingerprint(cfg_dict)
 
-    # zapis przebiegu (convergence)
-    conv_dir = "runs/convergence"
+    # --- convergence save
+    conv_dir = os.path.join("runs", "convergence", conv_subdir)
     ensure_dir(conv_dir)
     conv_path = os.path.join(conv_dir, f"ga_{run_id}_{cfg_id}_seed{seed}.csv")
 
@@ -101,7 +127,7 @@ def run_one_ga(boxes, warehouse, seed: int, cfg: GAConfig, patience: int, log_ev
         hist.append(out)
     write_csv(conv_path, hist)
 
-    # summary row
+    # --- summary row
     return {
         "algo": "ga",
         "run_id": run_id,
@@ -122,32 +148,22 @@ def run_one_ga(boxes, warehouse, seed: int, cfg: GAConfig, patience: int, log_ev
     }
 
 
-def make_ga_grid(mode: str) -> List[GAConfig]:
-    """
-    Pełna siatka najważniejszych hiperparametrów GA.
+# -------------------------
+# Phase A grid (operators)
+# -------------------------
+def make_grid_A(report_mode: str) -> List[GAConfig]:
+    # Operator grid (tuning)
+    ratio_to_remove_grid = [0.10, 0.20, 0.35, 0.50]  # 4
+    pmove_grid = [0.10, 0.20, 0.35]                  # 3
+    presupport_grid = [0.0, 0.20, 0.40]              # 3
+    init_ratio_grid = [0.2, 1.0]                     # 2
+    pcross_grid = [0.7, 0.9]                         # 2
 
-    Najmocniej wpływające na zachowanie (w Twojej implementacji):
-      - ratio_to_remove (agresywność "ruin")
-      - p_mut_move      (częstość uruchamiania bulk repack)
-      - p_mut_resupport (dodatkowa naprawa / repozycjonowanie)
-      - init_constructive_ratio (ile inicjalizacji constructive vs random)
-      - p_crossover
-
-    Resztę trzymamy jako sensowne stałe (żeby grid nie eksplodował).
-    """
-    # ---- GRID (edytuj jeśli chcesz większy/mniejszy) ----
-    ratio_to_remove_grid = [0.10, 0.20, 0.35, 0.50]
-    pmove_grid = [0.10, 0.20, 0.35]
-    presupport_grid = [0.0, 0.20, 0.40]
-    init_ratio_grid = [0.2, 1.0]
-    pcross_grid = [0.7, 0.9]
-
-    # (opcjonalnie) rozważ też tournament_k / pop_size / generations jako osobne eksperymenty,
-    # bo to mocno wpływa na czas. Tutaj trzymamy stałe:
+    # Fixed budget for Phase A
     POP_SIZE = 300
     GENERATIONS = 300
 
-    # stałe "sensowne"
+    # Fixed "reasonable defaults"
     SELECTION = "tournament"
     TOURNAMENT_K = 5
     ELITISM = 2
@@ -156,20 +172,20 @@ def make_ga_grid(mode: str) -> List[GAConfig]:
     MUT_STRENGTH = 0.15
     PRESENCE_INIT = 0.70
 
-    configs: List[GAConfig] = []
+    cfgs: List[GAConfig] = []
     for (rtr, pmove, pres, init_ratio, pcross) in product(
         ratio_to_remove_grid,
         pmove_grid,
         presupport_grid,
         init_ratio_grid,
-        pcross_grid
+        pcross_grid,
     ):
-        cfg = GAConfig(
+        cfgs.append(GAConfig(
             pop_size=POP_SIZE,
             generations=GENERATIONS,
 
             fitness_mode="penalized",
-            report_mode=mode,
+            report_mode=report_mode,
 
             init_strategy="mixed",
             init_constructive_ratio=init_ratio,
@@ -179,7 +195,6 @@ def make_ga_grid(mode: str) -> List[GAConfig]:
             elitism=ELITISM,
 
             p_crossover=pcross,
-
             p_mut_move=pmove,
             ratio_to_remove=rtr,
             p_mut_resupport=pres,
@@ -187,49 +202,55 @@ def make_ga_grid(mode: str) -> List[GAConfig]:
             p_mut_rot=P_ROT,
             p_mut_presence=P_PRES,
             mutation_strength=MUT_STRENGTH,
-
             prob_presence_init=PRESENCE_INIT,
-        )
-        configs.append(cfg)
+        ))
 
-    return configs
+    return cfgs
 
 
+# -------------------------
+# Main benchmark (Phase A only)
+# -------------------------
 def benchmark_basic(
     boxes_csv: str,
     warehouse: Tuple[int, int, int],
-    mode: str = "strict",           # report_mode: strict/partial
-    seeds: List[int] = [0, 1, 2, 3, 4],
+    mode: str = "strict",
+    seeds: List[int] = [0, 1, 2],
+    save_baseline: bool = True,
 ) -> None:
+    """
+    Runs only Phase A (wide operator grid) and saves:
+      - runs/convergence/A/*.csv
+      - runs/summary.csv (baseline + GA grid)
+      - runs/summary_A.csv (same as above, kept for convenience)
+    """
     boxes, wh_from_csv = load_boxes_from_csv(boxes_csv)
     if wh_from_csv is not None:
         warehouse = wh_from_csv
 
     ensure_dir("runs")
+    ensure_dir(os.path.join("runs", "convergence", "A"))
 
     summary_rows: List[Dict[str, Any]] = []
 
-    # 1) baseline: random search (zostawiamy, żeby mieć odniesienie)
-    for s in seeds:
-        summary_rows.append(run_one_random(
-            boxes=boxes,
-            warehouse=warehouse,
-            seed=s,
-            trials=100,
-            presence=0.7,
-            mode=mode
-        ))
+    # Baseline: random search (optional)
+    if save_baseline:
+        for s in seeds:
+            summary_rows.append(run_one_random(
+                boxes=boxes,
+                warehouse=warehouse,
+                seed=s,
+                trials=100,
+                presence=0.7,
+                report_mode=mode,
+            ))
 
-    # 2) GA — pełna siatka parametrów
-    configs = make_ga_grid(mode=mode)
+    # GA grid (Phase A)
+    cfgs = make_grid_A(report_mode=mode)
 
-    # możesz też podmienić seeds na np. [0] na screening:
-    # seeds = [0]
-
-    for i, cfg in enumerate(configs):
-        # run_id "ludzki": łatwo potem filtrować po nazwie pliku
+    for i, cfg in enumerate(cfgs):
         run_id = (
-            f"grid{i}"
+            f"A{i:03d}"
             f"_rtr{cfg.ratio_to_remove:.2f}"
             f"_pm{cfg.p_mut_move:.2f}"
             f"_prs{cfg.p_mut_resupport:.2f}"
@@ -237,17 +258,19 @@ def benchmark_basic(
             f"_pc{cfg.p_crossover:.1f}"
         )
         for s in seeds:
-            summary_rows.append(run_one_ga(
+            row = run_one_ga(
                 boxes=boxes,
                 warehouse=warehouse,
                 seed=s,
                 cfg=cfg,
                 patience=60,
                 log_every=5,
-                run_id=run_id
-            ))
+                run_id=run_id,
+                conv_subdir="A",
+            )
+            summary_rows.append(row)
 
-    # zapis zbiorczy + info o instancji
+    # Add instance metadata (useful for analysis)
     for r in summary_rows:
         r["warehouse"] = str(warehouse)
         r["warehouse_volume"] = warehouse_volume(warehouse)
@@ -255,19 +278,9 @@ def benchmark_basic(
         r["boxes_csv"] = boxes_csv
 
     write_csv("runs/summary.csv", summary_rows)
-    print("Saved:", "runs/summary.csv")
-    print("Saved convergence:", "runs/convergence/*.csv")
+    write_csv("runs/summary_A.csv", summary_rows)
 
-    # ------------------------------------------------------------
-    # Jeśli to będzie za wolne, najszybsze opcje ograniczenia:
-    #
-    # (1) Screening:
-    #     seeds=[0] i/lub mniejsze POP_SIZE/GENERATIONS w make_ga_grid()
-    #
-    # (2) Zmniejsz grid:
-    #     ratio_to_remove_grid = [0.15, 0.30, 0.45]
-    #     pmove_grid          = [0.10, 0.25, 0.40]
-    #     presupport_grid     = [0.0, 0.30]
-    #     init_ratio_grid     = [0.2, 1.0]
-    #     pcross_grid         = [0.8]
-    # ------------------------------------------------------------
+    print("Saved:")
+    print(" - runs/summary.csv")
+    print(" - runs/summary_A.csv")
+    print(" - runs/convergence/A/*.csv")

@@ -28,17 +28,18 @@ def parse_args():
     p.add_argument("--keep_ratio", type=float, default=0.25)
     p.add_argument("--tournament_k", type=int, default=5)
 
-    p.add_argument("--pcross", type=float, default=0.8)
+    p.add_argument("--pcross", type=float, default=0.7)
     p.add_argument("--elitism", type=int, default=2)
 
-    p.add_argument("--pmove", type=float, default=0.25)
+    p.add_argument("--pmove", type=float, default=0.35)
     p.add_argument("--prot", type=float, default=0.10)
     p.add_argument("--ppres", type=float, default=0.05)
-    p.add_argument("--presupport", type=float, default=0.20, help="probability of resupport pass after mutation")
+    p.add_argument("--presupport", type=float, default=0.0, help="probability of resupport pass after mutation")
     p.add_argument("--strength", type=float, default=0.15)
     p.add_argument("--presence_init", type=float, default=0.7)
 
-    p.add_argument("--ratio_to_remove", type=float, default=0.20, help="ratio of placed boxes to remove in bulk repack")
+    p.add_argument("--ratio_to_remove", type=float, default=0.35, help="ratio of placed boxes to remove in bulk repack")
+    p.add_argument("--init_constructive_ratio", type=float, default=1, help="initial population mixed strategy ratio")
 
     p.add_argument("--boxes_csv", type=str, default=None, help="path to csv with boxes (l,w,h) and optional Wx,Wy,Wz")
     p.add_argument("--warehouse", nargs=3, type=int, default=None, metavar=("Wx", "Wy", "Wz"))
@@ -110,6 +111,8 @@ def main():
 
         p_crossover=args.pcross,
         elitism=args.elitism,
+
+        init_constructive_ratio=args.init_constructive_ratio,
 
         p_mut_move=args.pmove,
         p_mut_rot=args.prot,
