@@ -23,10 +23,6 @@ Możesz wczytać listę własnych pudełek z pliku CSV. Plik musi zawierać kolu
 
     python main.py --boxes_csv sciezka/do/pliku.csv --plot
 
-### 3. Zmiana wielkości magazynu
-Domyślny magazyn ma wymiary 20x20x20. Możesz to zmienić, podając wymiary X Y Z:
-
-    python main.py --warehouse 50 50 50 --plot
 
 ## Benchmark i Testowanie Wydajności
 
@@ -51,9 +47,10 @@ Gdy już przeprowadzisz testy (benchmark), możesz użyć skryptu `plot_results.
 ### Jak generować wykresy?
 
 Uruchom poniższą komendę po zakończeniu benchmarku:
-
-    python plot_results.py
-
+```python
+python main.py --benchmark --tuning=True --warehouse 35 35 35 --boxes_csv data/boxes_2.csv
+python plot_results.py --mode hyperparams --conv_glob "runs/convergence/A/*.csv" --metric best_report
+```
 ### Co się wydarzy?
 Program przeanalizuje pliki z folderu `runs/` i utworzy nowy folder `runs/plots/` zawierający:
 

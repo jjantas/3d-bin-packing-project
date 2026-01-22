@@ -110,7 +110,7 @@ def main():
     args = parse_args()
 
     # defaults
-    warehouse = (20, 20, 20)
+    warehouse = (35, 35, 35)
     boxes = [
         (6, 5, 4),
         (7, 3, 4),
