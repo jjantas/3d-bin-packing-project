@@ -2,6 +2,11 @@
 
 Ten projekt to program, który rozwiązuje problem pakowania 3D. Jego zadaniem jest zmieszczenie jak największej liczby mniejszych pudełek (paczek) w jednym dużym magazynie (kontenerze), przestrzegając zasad fizyki (paczki nie mogą na siebie wchodzić ani wisieć w powietrzu).
 
+## Author Contributions  👥
+
+Projekt był realizowany zespołowo.  
+Moja część eksperymentów oraz alternatywne podejścia znajdują się na osobnym branchu: `alternative-experiments`.
+
 ## Opis działania
 
 Program korzysta z dwóch głównych metod:
