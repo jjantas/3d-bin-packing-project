@@ -1,0 +1,2 @@
+win_rate_ga_vs_random=1.000
+seeds_compared=3

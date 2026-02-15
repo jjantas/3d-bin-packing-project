@@ -143,29 +143,43 @@ def benchmark_basic(
         ))
 
     # 2) GA — kilka wariantów parametrów (mini grid)
+
+    # POMARANCZOWA LINIA w TOP 10 configurations (best_report)
     configs = [
-        GAConfig(
-            pop_size=500, generations=250,
-            fitness_mode="penalized",       
-            report_mode=mode,               
-            p_mut_resupport=0.40, p_mut_move=0.10, p_crossover=0.8,
-            init_strategy="constructive", init_constructive_ratio=1.0
-        ),
-        GAConfig(
-            pop_size=500, generations=250,
-            fitness_mode="penalized",
-            report_mode=mode,
-            p_mut_resupport=0.40, p_mut_move=0.10, p_crossover=0.8,
-            init_strategy="constructive", init_constructive_ratio=0.2
-        ),
-        GAConfig(
-            pop_size=500, generations=400,
-            fitness_mode="penalized",
-            report_mode=mode,
-            p_mut_resupport=0.40, p_mut_move=0.15, p_crossover=0.9,
-            init_strategy="constructive", init_constructive_ratio=0.2
-        ),
-    ]
+    GAConfig(
+    pop_size=300, generations=300,
+    report_mode=mode,
+    p_crossover=0.70,
+    p_mut_move=0.20,
+    ratio_to_remove=0.1,
+    p_mut_resupport=0,
+    init_strategy="constructive", init_constructive_ratio=1.0,
+    ),
+
+  
+    # CIEMNO-NIEBIESKA LINIA w TOP 10 configurations (best_report)
+    GAConfig(
+    pop_size=300, generations=300,
+    report_mode=mode,
+    p_crossover=0.70,
+    p_mut_move=0.35,
+    ratio_to_remove=0.35,
+    p_mut_resupport=0,
+    init_strategy="constructive", init_constructive_ratio=1.0,
+    ),
+
+  
+    # FIOLETOWA LINIA w TOP 10 configurations (best_report)
+    GAConfig(
+    pop_size=300, generations=300,
+    report_mode=mode,
+    p_crossover=0.70,
+    p_mut_move=0.10,
+    ratio_to_remove=0.10,
+    p_mut_resupport=0,
+    init_strategy="constructive", init_constructive_ratio=1.0,
+    ),
+]
 
     for i, cfg in enumerate(configs):
         run_id = f"cfg{i}"

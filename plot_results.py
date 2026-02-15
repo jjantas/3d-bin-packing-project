@@ -4,6 +4,7 @@ import argparse
 import csv
 import glob
 import os
+import pandas as pd
 from collections import defaultdict
 from typing import Dict, Any, List, Tuple
 
@@ -234,6 +235,135 @@ def plot_convergence(convergence_rows: List[Dict[str, Any]], title: str, out_pat
     plt.close()
 
 
+def plot_convergence_by_config(conv_glob: str, out_dir: str) -> None:
+    """
+    Zamiast osobnych wykresów dla (run_id, seed), robimy 3 wykresy zbiorcze:
+      1) gen_best_report vs gen (średnia po seedach) – osobna linia per run_id
+      2) avg_report vs gen (średnia po seedach) – osobna linia per run_id
+      3) feasible_rate vs gen (średnia po seedach) – osobna linia per run_id
+
+    Wymaga, żeby w convergence CSV były kolumny:
+      - run_id, seed, gen
+      - gen_best_report, avg_report, feasible_rate
+    (albo analogiczne *_eval jeśli chcesz liczyć penalized)
+    """
+    ensure_dir(out_dir)
+
+    files = sorted(glob.glob(conv_glob))
+    if not files:
+        print("No convergence files found with glob:", conv_glob)
+        return
+
+    dfs = []
+    for fp in files:
+        try:
+            df = pd.read_csv(fp)
+            df["__file__"] = os.path.basename(fp)
+            dfs.append(df)
+        except Exception as e:
+            print("Failed reading:", fp, "error:", e)
+
+    if not dfs:
+        print("No convergence data loaded.")
+        return
+
+    df = pd.concat(dfs, ignore_index=True)
+
+    # Upewnij się, że mamy kluczowe kolumny
+    required = ["run_id", "seed", "gen", "feasible_rate"]
+    for col in required:
+        if col not in df.columns:
+            print("Missing required column in convergence CSVs:", col)
+            print("Available columns:", list(df.columns))
+            return
+
+    # wybieramy metryki "report"
+    # jeśli nie ma report, można fallbackować na eval
+    if "gen_best_report" in df.columns:
+        best_col = "gen_best_report"
+    elif "gen_best_eval" in df.columns:
+        best_col = "gen_best_eval"
+    else:
+        # ostatecznie: best_report (global) bywa stałe w generacji, więc nie jest idealne,
+        # ale lepiej niż nic
+        best_col = "best_report" if "best_report" in df.columns else None
+
+    if "avg_report" in df.columns:
+        avg_col = "avg_report"
+    elif "avg_eval" in df.columns:
+        avg_col = "avg_eval"
+    else:
+        avg_col = None
+
+    if best_col is None or avg_col is None:
+        print("Missing columns for best/avg. Need one of:")
+        print(" - gen_best_report or gen_best_eval (for best)")
+        print(" - avg_report or avg_eval (for avg)")
+        print("Available columns:", list(df.columns))
+        return
+
+    # konwersje numeryczne
+    for col in ["gen", "seed", "feasible_rate", best_col, avg_col]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # agregacja: średnia po seedach per (run_id, gen)
+    g = df.groupby(["run_id", "gen"], as_index=False).agg(
+        best_mean=(best_col, "mean"),
+        avg_mean=(avg_col, "mean"),
+        feasible_mean=("feasible_rate", "mean"),
+    )
+
+    # sortowanie dla ładnych linii
+    g = g.sort_values(["run_id", "gen"])
+
+    run_ids = sorted([rid for rid in g["run_id"].dropna().unique() if str(rid).strip() != ""])
+    if not run_ids:
+        print("No run_id values found after aggregation.")
+        return
+
+    # ---- 1) BEST vs generation (średnia po seedach)
+    plt.figure()
+    for rid in run_ids:
+        sub = g[g["run_id"] == rid]
+        plt.plot(sub["gen"], sub["best_mean"], label=str(rid))
+    plt.xlabel("generation")
+    plt.ylabel("fitness (best, mean over seeds)")
+    plt.title("Convergence: Best fitness vs generation (by config)")
+    plt.legend(title="config (run_id)")
+    plt.tight_layout()
+    plt.savefig(os.path.join(out_dir, "convergence_best_by_config.png"))
+    plt.close()
+
+    # ---- 2) AVG vs generation (średnia po seedach)
+    plt.figure()
+    for rid in run_ids:
+        sub = g[g["run_id"] == rid]
+        plt.plot(sub["gen"], sub["avg_mean"], label=str(rid))
+    plt.xlabel("generation")
+    plt.ylabel("fitness (avg, mean over seeds)")
+    plt.title("Convergence: Avg fitness vs generation (by config)")
+    plt.legend(title="config (run_id)")
+    plt.tight_layout()
+    plt.savefig(os.path.join(out_dir, "convergence_avg_by_config.png"))
+    plt.close()
+
+    # ---- 3) feasible_rate vs generation (średnia po seedach)
+    plt.figure()
+    for rid in run_ids:
+        sub = g[g["run_id"] == rid]
+        plt.plot(sub["gen"], sub["feasible_mean"], label=str(rid))
+    plt.xlabel("generation")
+    plt.ylabel("feasible_rate (mean over seeds)")
+    plt.title("Convergence: Feasible rate vs generation (by config)")
+    plt.legend(title="config (run_id)")
+    plt.tight_layout()
+    plt.savefig(os.path.join(out_dir, "convergence_feasible_rate_by_config.png"))
+    plt.close()
+
+    print("Saved aggregated convergence plots to:", out_dir)
+
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--summary", type=str, default="runs/summary.csv")
@@ -256,11 +386,7 @@ def main():
         print("No convergence files found with glob:", args.conv_glob)
         return
 
-    # grupuj po (run_id, seed) wg nazwy pliku albo kolumn
-    for fp, rows in conv_files:
-        # tytuł z nazwy pliku
-        name = os.path.basename(fp).replace(".csv", "")
-        plot_convergence(rows, title=name, out_path=os.path.join(args.out_dir, name + ".png"))
+    plot_convergence_by_config(args.conv_glob, args.out_dir)
 
     print("Saved convergence plots to:", args.out_dir)
 
